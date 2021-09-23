@@ -1,51 +1,5 @@
-set(includes
-   $ENV{IDF_PATH}/components/esp_common/include
-   $ENV{IDF_PATH}/components/soc/include
-   $ENV{IDF_PATH}/components/esp_rom/include
-   $ENV{IDF_PATH}/components/esp_timer/include
-   $ENV{IDF_PATH}/components/esp32c3/include
-   $ENV{IDF_PATH}/components/riscv/include
-   $ENV{IDF_PATH}/components/freertos/include
-   $ENV{IDF_PATH}/components/freertos/port/riscv/include
-   $ENV{IDF_PATH}/components/esp_event/include
-   $ENV{IDF_PATH}/components/esp_wifi/include
-   $ENV{IDF_PATH}/components/driver/include
-   $ENV{IDF_PATH}/components/tcpip_adapter/include
-   $ENV{IDF_PATH}/components/esp-tls
-   ${PROJECT_DIR}/
-   ${PROJECT_DIR}/../../../components/esp_syscall/include
-   ${PROJECT_DIR}/../../../components/esp_ps/include
-   .
-    )
-
-set(private_include_dirs
-    $ENV{IDF_PATH}/components/hal/include
-    $ENV{IDF_PATH}/components/hal/esp32c3/include/
-    $ENV{IDF_PATH}/components/freertos/include/freertos
-    $ENV{IDF_PATH}/components/freertos/port/riscv/include/freertos
-    $ENV{IDF_PATH}/components/freertos/port/riscv
-    $ENV{IDF_PATH}/components/riscv/include
-    $ENV{IDF_PATH}/components/soc/include
-    $ENV{IDF_PATH}/components/soc/esp32c3/include
-    $ENV{IDF_PATH}/components/heap/include
-    $ENV{IDF_PATH}/components/esp_system/include
-    $ENV{IDF_PATH}/components/esp_netif/include
-    $ENV{IDF_PATH}/components/esp_eth/include
-    $ENV{IDF_PATH}/components/esp_hw_support/include
-    $ENV{IDF_PATH}/components/lwip/lwip/src/include
-    $ENV{IDF_PATH}/components/lwip/port/esp32/include
-    $ENV{IDF_PATH}/components/newlib/platform_include
-    $ENV{IDF_PATH}/components/lwip/include
-    $ENV{IDF_PATH}/components/lwip/include/apps/sntp/
-    $ENV{IDF_PATH}/components/lwip/include/apps/
-
-    $ENV{IDF_PATH}/components/mbedtls/mbedtls/include/
-    $ENV{IDF_PATH}/components/mbedtls/port/include/
-    )
-
 idf_component_register(SRCS "user_code.c"
-                    INCLUDE_DIRS ${includes}
-                    PRIV_INCLUDE_DIRS ${private_include_dirs})
+                    INCLUDE_DIRS "..")
 
 set_property(TARGET ${COMPONENT_LIB} APPEND PROPERTY INTERFACE_LINK_LIBRARIES "-Wl,--gc-sections")
 

@@ -26,18 +26,15 @@ if (NOT DEFSYM_LIST)
     message(FATAL_ERROR "DEFSYM_LIST missing from parent build process")
 endif()
 
-# Trim down the components since user app depends on these two
-set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../../../components/user_app_components)
-set(COMPONENTS esptool_py main)
-set(BOOTLOADER_BUILD 1)
+set(USER_APP_BUILD 1)
+
+set(ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../../..)
+set(EXTRA_COMPONENT_DIRS ${ROOT_DIR}/components ${ROOT_DIR}/components/user_app_components)
 
 include(${IDF_PATH}/tools/cmake/project.cmake)
 
 # Include sdkconfig.h derived from the protected_app build.
 include_directories(${CONFIG_DIR})
-
-# This is set in order to exclude the common components added by toplevel CMake
-idf_build_set_property(__COMPONENT_REQUIRES_COMMON "")
 
 # This is set in order to prevent sdkconfig to be overwritten
 # sdkconfig is derived from the protected_app
@@ -48,5 +45,6 @@ idf_build_set_property(__OUTPUT_SDKCONFIG 0)
 idf_build_set_property(COMPILE_OPTIONS "-nostdlib" APPEND)
 idf_build_set_property(COMPILE_OPTIONS "-fno-builtin" APPEND)
 idf_build_set_property(COMPILE_OPTIONS "-fno-inline" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-Wno-format" APPEND)
 
 project(user_app)

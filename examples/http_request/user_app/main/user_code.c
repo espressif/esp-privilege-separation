@@ -189,7 +189,7 @@ void http_request(void *args)
         }
 
         do {
-            usr_memset(recv_buf, 0, sizeof(recv_buf));
+            memset(recv_buf, 0, sizeof(recv_buf));
             r = read(s, recv_buf, sizeof(recv_buf)-1);
             for(int i = 0; i < r; i++) {
                 putchar(recv_buf[i]);

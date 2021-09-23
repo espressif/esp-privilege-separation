@@ -6,6 +6,10 @@ idf_build_get_property(config_dir CONFIG_DIR)
 idf_build_get_property(python PYTHON)
 idf_build_get_property(extra_cmake_args EXTRA_CMAKE_ARGS)
 
+if(USER_APP_BUILD)
+    return()
+endif()
+
 # Build user_app inside PROJECT build folder
 set(USER_BUILD_DIR "${build_dir}/user_app")
 

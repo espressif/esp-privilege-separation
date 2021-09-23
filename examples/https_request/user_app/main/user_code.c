@@ -187,7 +187,7 @@ static void https_request(esp_tls_cfg_t cfg)
 
     do {
         len = sizeof(buf) - 1;
-        usr_memset(buf, 0x0, sizeof(buf));
+        memset(buf, 0x0, sizeof(buf));
         ret = usr_esp_tls_conn_read(tls, (char *)buf, len);
 
         if (ret == ESP_TLS_ERR_SSL_WANT_WRITE  || ret == ESP_TLS_ERR_SSL_WANT_READ) {

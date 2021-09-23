@@ -1,7 +1,11 @@
-set(srcs
-    "src/syscall_wrappers.c"
-    "src/esp_syscalls.c"
-    "src/syscall_handler.S")
+if(USER_APP_BUILD)
+    set(srcs)
+else()
+    set(srcs
+        "src/syscall_wrappers.c"
+        "src/esp_syscalls.c"
+        "src/syscall_handler.S")
+endif()
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS "include"
