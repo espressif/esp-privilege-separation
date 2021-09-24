@@ -7,8 +7,14 @@ else()
         "src/syscall_handler.S")
 endif()
 
+set(includes
+    "include"
+    "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+
+
 idf_component_register(SRCS ${srcs}
-                    INCLUDE_DIRS "include"
+                    INCLUDE_DIRS ${includes}
                     REQUIRES esp_wifi nvs_flash esp-tls esp_ps)
 
 set(syscallhdr_sh
@@ -20,11 +26,11 @@ set(syscalltbl_sh
     )
 
 set(syscall_def_h
-    ${COMPONENT_DIR}/include/syscall_def.h
+    ${CMAKE_CURRENT_BINARY_DIR}/syscall_def.h
     )
 
 set(esp_syscall_h
-    ${COMPONENT_DIR}/src/esp_syscall.h
+    ${CMAKE_CURRENT_BINARY_DIR}/esp_syscall.h
     )
 
 add_custom_command(OUTPUT ${syscall_def_h}
