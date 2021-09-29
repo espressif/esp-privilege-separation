@@ -49,14 +49,15 @@ int usr_putchar(int c);
 int usr_printf(const char *fmt, ...);
 int usr_vprintf(const char *fmt, va_list arg);
 
-int usr_xTaskCreate(TaskFunction_t pvTaskCode,
+int usr_xTaskCreatePinnedToCore(TaskFunction_t pvTaskCode,
                                    const char * const pcName,
 			                       const uint32_t usStackDepth,
                                    void * const pvParameters,
                                    UBaseType_t uxPriority,
-                                   TaskHandle_t * const pvCreatedTask);
+                                   TaskHandle_t * const pvCreatedTask,
+                                   const BaseType_t xCoreID);
 
-QueueHandle_t usr_xQueueCreate(uint32_t QueueLength, uint32_t ItemSize);
+QueueHandle_t usr_xQueueGenericCreate(uint32_t QueueLength, uint32_t ItemSize, uint8_t ucQueueType);
 
 int usr_xQueueReceive(QueueHandle_t xQueue, void * const buffer, TickType_t TickstoWait);
 int usr_xQueueSend(QueueHandle_t xQueue, const void *pvItemToQueue, TickType_t TickstoWait);
@@ -66,8 +67,6 @@ void usr_vQueueDelete(QueueHandle_t xQueue);
 void usr_vTaskDelay(TickType_t TickstoWait);
 
 void usr_vTaskDelete(TaskHandle_t TaskHandle);
-
-void usr_gpio_isr_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void* args);
 
 esp_err_t usr_nvs_flash_init();
 esp_err_t usr_esp_wifi_init(const wifi_init_config_t *wifi_config);
@@ -89,8 +88,8 @@ esp_err_t usr_esp_wifi_connect();
 
 int usr_getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **res, struct addrinfo *res_data);
 void usr_freeaddrinfo(struct addrinfo *ai);
-int usr_socket(int domain, int type, int protocol);
-int usr_connect(int s, const struct sockaddr *name, socklen_t namelen);
+int usr_lwip_socket(int domain, int type, int protocol);
+int usr_lwip_connect(int s, const struct sockaddr *name, socklen_t namelen);
 int usr_write(int s, const void *data, size_t size);
 int usr_read(int s, void *mem, size_t len);
 int usr_close(int s);

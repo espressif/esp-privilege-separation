@@ -1,17 +1,17 @@
-0   common  spill                                   sys_ni_syscall
+0   custom  spill                                   sys_ni_syscall
 
 1   common  putchar                                 sys_putchar
 2   common  vprintf                                 sys_vprintf
 
 # FreeRTOS
-3   common  xTaskCreate                             sys_xTaskCreate
+3   common  xTaskCreatePinnedToCore                 sys_xTaskCreate
 4   common  vTaskDelete                             sys_vTaskDelete
 5   common  vTaskDelay                              sys_vTaskDelay
-6   common  xQueueCreate                            sys_xQueueCreate
+6   common  xQueueGenericCreate                     sys_xQueueGenericCreate
 7   common  xQueueReceive                           sys_xQueueReceive
 8   common  xQueueSend                              sys_xQueueSend
 9   common  vQueueDelete                            sys_vQueueDelete
-10   common  xEventGroupCreate                       sys_xEventGroupCreate
+10  common  xEventGroupCreate                       sys_xEventGroupCreate
 11  common  xEventGroupSetBits                      sys_xEventGroupSetBits
 12  common  xEventGroupClearBits                    sys_xEventGroupClearBits
 13  common  xEventGroupWaitBits                     sys_xEventGroupWaitBits
@@ -24,8 +24,9 @@
 16  common  esp_netif_init                          sys_esp_netif_init
 17  common  esp_event_loop_create_default           sys_esp_event_loop_create_default
 18  common  esp_netif_create_default_wifi_sta       sys_esp_netif_create_default_wifi_sta
-19  common  esp_event_handler_instance_register     sys_esp_event_handler_instance_register
-20  common  esp_event_handler_instance_unregister   sys_esp_event_handler_instance_unregister
+
+19  custom  esp_event_handler_instance_register     sys_esp_event_handler_instance_register
+20  custom  esp_event_handler_instance_unregister   sys_esp_event_handler_instance_unregister
 21  common  esp_wifi_init                           sys_esp_wifi_init
 22  common  esp_wifi_set_mode                       sys_esp_wifi_set_mode
 23  common  esp_wifi_set_config                     sys_esp_wifi_set_config
@@ -33,10 +34,10 @@
 25  common  esp_wifi_connect                        sys_esp_wifi_connect
 
 # Socket Programming
-26  common  getaddrinfo                             sys_getaddrinfo
-27  common  freeaddrinfo                            sys_freeaddrinfo
-28  common  socket                                  sys_socket
-29  common  connect                                 sys_connect
+26  custom  getaddrinfo                             sys_getaddrinfo
+27  common  lwip_freeaddrinfo                       sys_freeaddrinfo
+28  common  lwip_socket                             sys_socket
+29  common  lwip_connect                            sys_connect
 30  common  write                                   sys_write
 31  common  read                                    sys_read
 32  common  close                                   sys_close
@@ -44,11 +45,11 @@
 # GPIO specific
 33  common  gpio_config                             sys_gpio_config
 34  common  gpio_install_isr_service                sys_gpio_install_isr_service
-35  common  gpio_isr_handler_add                    sys_gpio_isr_handler_add
-36  common  gpio_isr_handler_remove                 sys_gpio_isr_handler_remove
+35  custom  gpio_isr_handler_add                    sys_gpio_isr_handler_add
+36  custom  gpio_isr_handler_remove                 sys_gpio_isr_handler_remove
 
 # TLS
 37  common  esp_tls_conn_http_new                   sys_esp_tls_conn_http_new
-38  common  esp_tls_conn_write                      sys_esp_tls_conn_write
-39  common  esp_tls_conn_read                       sys_esp_tls_conn_read
+38  custom  esp_tls_conn_write                      sys_esp_tls_conn_write
+39  custom  esp_tls_conn_read                       sys_esp_tls_conn_read
 40  common  esp_tls_conn_delete                     sys_esp_tls_conn_delete

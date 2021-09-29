@@ -58,19 +58,21 @@ static uint8_t _gpio_handler_count;
  */
 const __attribute__((section(".rodata_desc"))) uint8_t user_app_desc[256];
 
-int usr_xTaskCreate(TaskFunction_t pvTaskCode,
+int usr_xTaskCreatePinnedToCore(TaskFunction_t pvTaskCode,
                                    const char * const pcName,
 			                       const uint32_t usStackDepth,
                                    void * const pvParameters,
                                    UBaseType_t uxPriority,
-                                   TaskHandle_t * const pvCreatedTask)
+                                   TaskHandle_t * const pvCreatedTask,
+                                   const BaseType_t xCoreID)
 {
-    return EXECUTE_SYSCALL(pvTaskCode, pcName, usStackDepth, pvParameters, uxPriority, pvCreatedTask, __NR_xTaskCreate);
+    // Not using the xCoreID argument as this is a single core system and we don't support more than 6 arguments
+    return EXECUTE_SYSCALL(pvTaskCode, pcName, usStackDepth, pvParameters, uxPriority, pvCreatedTask, __NR_xTaskCreatePinnedToCore);
 }
 
-QueueHandle_t usr_xQueueCreate(uint32_t QueueLength, uint32_t ItemSize)
+QueueHandle_t usr_xQueueGenericCreate(uint32_t QueueLength, uint32_t ItemSize, uint8_t ucQueueType)
 {
-    return EXECUTE_SYSCALL(QueueLength, ItemSize, __NR_xQueueCreate);
+    return EXECUTE_SYSCALL(QueueLength, ItemSize, ucQueueType, __NR_xQueueGenericCreate);
 }
 
 int usr_xQueueReceive(QueueHandle_t xQueue, void * const buffer, TickType_t TickstoWait)
@@ -125,8 +127,8 @@ esp_err_t usr_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, 
     esp_err_t ret;
     _gpio_handler_count++;
     if (_gpio_handler_count == 1) {
-        usr_gpio_isr_queue = usr_xQueueCreate(10, sizeof(usr_gpio_args_t));
-        usr_xTaskCreate(usr_gpio_isr_task, "User GPIO ISR dispatcher", 1024, usr_gpio_isr_queue, 22, &usr_gpio_isr_task_handle);
+        usr_gpio_isr_queue = usr_xQueueGenericCreate(10, sizeof(usr_gpio_args_t), queueQUEUE_TYPE_BASE);
+        usr_xTaskCreatePinnedToCore(usr_gpio_isr_task, "User GPIO ISR dispatcher", 1024, usr_gpio_isr_queue, 22, &usr_gpio_isr_task_handle, 0);
     }
 
     ret = EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, usr_gpio_isr_queue, __NR_gpio_isr_handler_add);
@@ -211,8 +213,8 @@ esp_err_t usr_esp_event_handler_instance_register(usr_esp_event_base_t event_bas
     esp_err_t ret;
     _event_handler_count++;
     if (_event_handler_count == 1) {
-        usr_event_loop_queue = usr_xQueueCreate(10, sizeof(usr_event_args_t));
-        usr_xTaskCreate(usr_event_loop_task, "User event loop task", 2048, usr_event_loop_queue, 21, &usr_event_loop_task_handle);
+        usr_event_loop_queue = usr_xQueueGenericCreate(10, sizeof(usr_event_args_t), queueQUEUE_TYPE_BASE);
+        usr_xTaskCreatePinnedToCore(usr_event_loop_task, "User event loop task", 2048, usr_event_loop_queue, 21, &usr_event_loop_task_handle, 0);
     }
 
     ret = EXECUTE_SYSCALL(event_base, event_id, event_handler, event_handler_arg, context, usr_event_loop_queue,
@@ -269,19 +271,19 @@ int usr_getaddrinfo(const char *nodename, const char *servname, const struct add
     return EXECUTE_SYSCALL(nodename, servname, hints, res, res_data, __NR_getaddrinfo);
 }
 
-void usr_freeaddrinfo(struct addrinfo *ai)
+void usr_lwip_freeaddrinfo(struct addrinfo *ai)
 {
-    EXECUTE_SYSCALL(ai, __NR_freeaddrinfo);
+    EXECUTE_SYSCALL(ai, __NR_lwip_freeaddrinfo);
 }
 
-int usr_socket(int domain, int type, int protocol)
+int usr_lwip_socket(int domain, int type, int protocol)
 {
-    return EXECUTE_SYSCALL(domain, type, protocol, __NR_socket);
+    return EXECUTE_SYSCALL(domain, type, protocol, __NR_lwip_socket);
 }
 
-int usr_connect(int s, const struct sockaddr *name, socklen_t namelen)
+int usr_lwip_connect(int s, const struct sockaddr *name, socklen_t namelen)
 {
-    return EXECUTE_SYSCALL(s, name, namelen, __NR_connect);
+    return EXECUTE_SYSCALL(s, name, namelen, __NR_lwip_connect);
 }
 
 int usr_write(int s, const void *data, size_t size)

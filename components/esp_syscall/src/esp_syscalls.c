@@ -118,7 +118,7 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     return pdPASS;
 }
 
-static QueueHandle_t sys_xQueueCreate(uint32_t QueueLength, uint32_t ItemSize)
+static QueueHandle_t sys_xQueueGenericCreate(uint32_t QueueLength, uint32_t ItemSize, uint8_t ucQueueType)
 {
     QueueHandle_t q;
     size_t queue_size = (size_t) (QueueLength * ItemSize);
@@ -128,7 +128,7 @@ static QueueHandle_t sys_xQueueCreate(uint32_t QueueLength, uint32_t ItemSize)
         return NULL;
     }
     uint8_t *queue_storage = heap_caps_malloc(queue_size, MALLOC_CAP_WORLD1);
-    q = xQueueCreateStatic(QueueLength, ItemSize, queue_storage, queue);
+    q = xQueueGenericCreateStatic(QueueLength, ItemSize, queue_storage, queue, ucQueueType);
     return q;
 }
 
