@@ -1,0 +1,302 @@
+From 95fbc8d6af868ce6c0e6de61cc6d10ea18ec4dc7 Mon Sep 17 00:00:00 2001
+From: Sachin Parekh <sachin.parekh@espressif.com>
+Date: Tue, 18 May 2021 23:18:24 +0530
+Subject: [PATCH] Changes to realize privilege-separation
+
+---
+ components/esp32c3/Kconfig                    |   6 ++
+ components/hal/interrupt_controller_hal.c     |   2 +-
+ components/heap/include/esp_heap_caps.h       |   2 +
+ components/riscv/vectors.S                    | 100 ++++++++++++++++++
+ .../include/soc/world_controller_reg.h        |  50 +++++++++
+ components/soc/esp32c3/soc_memory_layout.c    |   8 +-
+ 6 files changed, 165 insertions(+), 3 deletions(-)
+ create mode 100644 components/soc/esp32c3/include/soc/world_controller_reg.h
+
+diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
+index 296427721a7..2eb50dc94d9 100644
+--- a/components/esp32c3/Kconfig
++++ b/components/esp32c3/Kconfig
+@@ -252,4 +252,10 @@ menu "ESP32C3-Specific"
+             This option provides a software workaround for this issue. Configure to isolate all
+             GPIO pins in sleep state.
+ 
++    config ESP_PRIVILEGE_SEPARATION_ENABLE
++        bool "Enable privilege separation using WORLD controller"
++        default n
++        help
++            Enable user kernel separation
++
+ endmenu  # ESP32C3-Specific
+diff --git a/components/hal/interrupt_controller_hal.c b/components/hal/interrupt_controller_hal.c
+index f7e815beffe..e50c0db74d9 100644
+--- a/components/hal/interrupt_controller_hal.c
++++ b/components/hal/interrupt_controller_hal.c
+@@ -22,7 +22,7 @@ static bool is_interrupt_number_reserved(int interrupt_number)
+ {
+     // Workaround to reserve interrupt number 1 for Wi-Fi, 5,8 for Bluetooth, 6 for "permanently disabled interrupt"
+     // [TODO: IDF-2465]
+-    const uint32_t reserved = BIT(1) | BIT(5) | BIT(6) | BIT(8);
++    const uint32_t reserved = BIT(1) | BIT(2) | BIT(5) | BIT(6) | BIT(8);
+     if (reserved & BIT(interrupt_number)) {
+         return true;
+     }
+diff --git a/components/heap/include/esp_heap_caps.h b/components/heap/include/esp_heap_caps.h
+index bed3d710bf0..b20441103aa 100644
+--- a/components/heap/include/esp_heap_caps.h
++++ b/components/heap/include/esp_heap_caps.h
+@@ -41,6 +41,8 @@ extern "C" {
+ #define MALLOC_CAP_DEFAULT          (1<<12) ///< Memory can be returned in a non-capability-specific memory allocation (e.g. malloc(), calloc()) call
+ #define MALLOC_CAP_IRAM_8BIT        (1<<13) ///< Memory must be in IRAM and allow unaligned access
+ #define MALLOC_CAP_RETENTION        (1<<14)
++#define MALLOC_CAP_WORLD0           (1<<15) ///< Memory must be mapped to WORLD0 memory space
++#define MALLOC_CAP_WORLD1           (1<<16) ///< Memory must be mapped to WORLD1 memory space
+ 
+ #define MALLOC_CAP_INVALID          (1<<31) ///< Memory can't be used / list end marker
+ 
+diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
+index 2e1c7c477f8..57576fcf6de 100644
+--- a/components/riscv/vectors.S
++++ b/components/riscv/vectors.S
+@@ -16,7 +16,12 @@
+ #include "riscv/rvruntime-frames.h"
+ #include "soc/soc_caps.h"
+ #include "sdkconfig.h"
++#include "soc/sensitive_reg.h"
++#include "soc/world_controller_reg.h"
++#include "soc/extmem_reg.h"
+ 
++#define EXCCAUSE_ECALL  11
++#define WORLD_OFFSET    (0x4c + CONFIG_FREERTOS_MAX_TASK_NAME_LEN + 3)&~3
+ 
+ 	.equ SAVE_REGS, 32
+ 	.equ CONTEXT_SIZE, (SAVE_REGS * 4)
+@@ -61,6 +66,35 @@
+ 	sw   t0, RV_STK_MEPC(sp)
+ .endm
+ 
++.macro save_world
++	mv      t0, zero
++	csrr    t1, mcause
++	li      t2, 0x80000000
++	bleu    t1, t2, _from_exception
++
++	li      t2, 0x7fffffff
++	and     t0, t1, t2
++_from_exception:
++	/* t0 contains the mcause that is also the STATUSTABLE entry */
++	la      t1, WORLD_CONTROL_CORE_X_STATUSTABLE(0,0)
++	slli    t0, t0, 2
++	add     t2, t1, t0
++	lw      t3, 0x0(t2)
++	/* Zero out the STATUSTABLE contents and store the WORLD */
++	sw      zero, 0x0(t2)
++	andi    t3, t3, 1
++
++	la      t4, pxCurrentTCB
++	lw      t5, 0x00(t4)
++	sw      t3, WORLD_OFFSET(t5)
++
++	/* Set WORLD controller MIE to track changes in STATUSTABLE */
++	la      t0, WORLD_CONTROL_CORE_X_MSTATUS_MIE(0)
++	li      t1, 1
++	sw      t1, 0x0(t0)
++	fence
++.endm
++
+ .macro restore_regs
+ 	lw   ra,  RV_STK_RA(sp)
+ 	lw   tp,  RV_STK_TP(sp)
+@@ -99,6 +133,29 @@
+ 	csrw	mepc, t0
+ .endm
+ 
++.macro restore_world
++	la      t0, pxCurrentTCB
++	lw      t0, 0x00(t0)
++	lw      t0, WORLD_OFFSET(t0)
++	beq     t0, zero, skip_restore_world
++
++	/* Prepare WORLD controller for switch */
++	li      t1, 2
++	la      t2, WORLD_CONTROL_CORE_X_WORLD_PREPARE(0)
++	sw      t1, 0x0(t2)
++
++	/* Set TRIGGER_ADDR to the return address; held by MEPC */
++	lw      t1, RV_STK_MEPC(sp)
++	la      t2, WORLD_CONTROL_CORE_X_WORLD_TRIGGER_ADDR(0)
++	sw      t1, 0x0(t2)
++
++	li      t1, 1
++	la      t2, WORLD_CONTROL_CORE_X_WORLD_UPDATE(0)
++	sw      t1, 0x0(t2)
++skip_restore_world:
++	fence
++.endm
++
+ 	.global rtos_int_enter
+ 	.global rtos_int_exit
+ 	.global _global_interrupt_handler
+@@ -141,6 +198,27 @@ _vector_table:
+ 	/* Exception handler.*/
+ 	.type _panic_handler, @function
+ _panic_handler:
++	/* Need to check if IRAM violation has occurred, if so delegate it to _interrupt_handler */
++	csrw    mscratch, t0
++	la      t0, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_2_REG
++	lw      t0, 0x00(t0)
++	andi    t0, t0, 0x1
++	xori    t0, t0, 0x1
++	bne     t0, zero, 1f
++	csrr    t0, mscratch
++	j       _interrupt_handler
++1:
++	/* Need to check if cache violation has occurred, if so delegate it to _interrupt_handler */
++	la      t0, EXTMEM_CORE0_ACS_CACHE_INT_ST_REG
++	lw      t0, 0x00(t0)
++	andi    t0, t0, 0x4
++	xori    t0, t0, 0x4
++	bne     t0, zero, 2f
++	csrr    t0, mscratch
++	j       _interrupt_handler
++2:
++	csrr    t0, mscratch
++
+ 	addi sp, sp, -RV_STK_FRMSZ /* allocate space on stack to store necessary registers */
+ 	/* save general registers */
+ 	sw ra,  RV_STK_RA(sp)
+@@ -175,6 +253,22 @@ _panic_handler:
+ 	sw t6,  RV_STK_T6(sp)
+ 	addi t0, sp, RV_STK_FRMSZ /* restore sp with the value when trap happened */
+ 	sw t0,  RV_STK_SP(sp)
++
++	/* If exception caused by ECALL, delegate to __ecall_handler and store
++	 * privileged registers in kernel stack
++	 */
++	csrr    t2, mcause
++	li      t3, EXCCAUSE_ECALL
++	bne     t2, t3, _skip_ecall
++
++#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++	.global __ecall_handler
++
++	// Need to be defined by the application
++	call    __ecall_handler				// Should not return
++#endif
++
++_skip_ecall:
+ 	csrr t0, mepc
+ 	sw t0,  RV_STK_MEPC(sp)
+ 	csrr t0, mstatus
+@@ -222,6 +316,9 @@ _interrupt_handler:
+ 	/* entry */
+ 	save_regs
+ 	save_mepc
++	#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++	save_world
++	#endif
+ 
+ 	/* Before doing anythig preserve the stack pointer */
+ 	/* It will be saved in current TCB, if needed */
+@@ -294,6 +391,9 @@ _interrupt_handler:
+ 	/* restore the rest of the registers */
+ 	csrw mcause, s1
+ 	csrw mstatus, s2
++	#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++	restore_world
++	#endif
+ 	restore_mepc
+ 	restore_regs
+ 
+diff --git a/components/soc/esp32c3/include/soc/world_controller_reg.h b/components/soc/esp32c3/include/soc/world_controller_reg.h
+new file mode 100644
+index 00000000000..f4a6fe37247
+--- /dev/null
++++ b/components/soc/esp32c3/include/soc/world_controller_reg.h
+@@ -0,0 +1,50 @@
++#define WORLD_CONTROL_BASE                                      0x600D0000
++#define WORLD_CONTROL_CORE_X_BASE(i)                            ((WORLD_CONTROL_BASE) + 0x400*(i))
++
++#define WORLD_CONTROL_CORE_X_MTVEC_BASE(i)                      (WORLD_CONTROL_CORE_X_BASE(i) + 0x000)
++#define WORLD_CONTROL_CORE_X_MSTATUS_MIE(i)                     (WORLD_CONTROL_CORE_X_BASE(i) + 0x004)
++#define WORLD_CONTROL_CORE_X_ENTRY_CHECK(i)                     (WORLD_CONTROL_CORE_X_BASE(i) + 0x008)
++#define WORLD_CONTROL_CORE_X_WORLD_CAHNGE_OPT(i)                (WORLD_CONTROL_CORE_X_BASE(i) + 0x020)
++#define WORLD_CONTROL_CORE_X_MESSAGE_ADDR(i)                    (WORLD_CONTROL_CORE_X_BASE(i) + 0x024)
++#define WORLD_CONTROL_CORE_X_MESSAGE_MAX(i)                     (WORLD_CONTROL_CORE_X_BASE(i) + 0x028)
++#define WORLD_CONTROL_CORE_X_STATUSTABLE(i, j)                  (WORLD_CONTROL_CORE_X_BASE(i) + 0x040 + 0x4*(j))
++#define WORLD_CONTROL_CORE_X_STATUSTABLE_CURRENT(i)             (WORLD_CONTROL_CORE_X_BASE(i) + 0x0E0)
++#define WORLD_CONTROL_CORE_X_MESSAGE_PHASE(i)                   (WORLD_CONTROL_CORE_X_BASE(i) + 0x0E4)
++#define WORLD_CONTROL_CORE_X_WORLD_TRIGGER_ADDR(i)              (WORLD_CONTROL_CORE_X_BASE(i) + 0x140)
++#define WORLD_CONTROL_CORE_X_WORLD_PREPARE(i)                   (WORLD_CONTROL_CORE_X_BASE(i) + 0x144)
++#define WORLD_CONTROL_CORE_X_WORLD_UPDATE(i)                    (WORLD_CONTROL_CORE_X_BASE(i) + 0x148)
++#define WORLD_CONTROL_CORE_X_WORLD_CANCEL(i)                    (WORLD_CONTROL_CORE_X_BASE(i) + 0x14c)
++#define WORLD_CONTROL_CORE_X_WORLD_IRAM0(i)                     (WORLD_CONTROL_CORE_X_BASE(i) + 0x150)
++#define WORLD_CONTROL_CORE_X_WORLD_DRAM0_PIF(i)                 (WORLD_CONTROL_CORE_X_BASE(i) + 0x154)
++#define WORLD_CONTROL_CORE_X_WORLD_PHASE(i)                     (WORLD_CONTROL_CORE_X_BASE(i) + 0x158)
++#define WORLD_CONTROL_CORE_X_NMI_MASK_ENABLE(i)                 (WORLD_CONTROL_CORE_X_BASE(i) + 0x180)
++#define WORLD_CONTROL_CORE_X_NMI_MASK_TRIGGER_ADDR(i)           (WORLD_CONTROL_CORE_X_BASE(i) + 0x184)
++#define WORLD_CONTROL_CORE_X_NMI_MASK_DISABLE(i)                (WORLD_CONTROL_CORE_X_BASE(i) + 0x188)
++#define WORLD_CONTROL_CORE_X_NMI_MASK_CANCEL(i)                 (WORLD_CONTROL_CORE_X_BASE(i) + 0x18c)
++#define WORLD_CONTROL_CORE_X_NMI_MASK(i)                        (WORLD_CONTROL_CORE_X_BASE(i) + 0x190)
++#define WORLD_CONTROL_CORE_X_NMI_MASK_PHASE(i)                  (WORLD_CONTROL_CORE_X_BASE(i) + 0x194)
++
++#define World_Controller_DMA_APBPERI_SPI2                       (CPU_PERI_WORLD_CONTROLLER + 0x800)
++#define World_Controller_DMA_APBPERI_SPI3                       (CPU_PERI_WORLD_CONTROLLER + 0x804)
++#define World_Controller_DMA_APBPERI_UCHI0                      (CPU_PERI_WORLD_CONTROLLER + 0x808)
++#define World_Controller_DMA_APBPERI_I2S0                       (CPU_PERI_WORLD_CONTROLLER + 0x80C)
++#define World_Controller_DMA_APBPERI_I2S1                       (CPU_PERI_WORLD_CONTROLLER + 0x810)
++#define World_Controller_DMA_APBPERI_LCD_CAM                    (CPU_PERI_WORLD_CONTROLLER + 0x814)
++#define World_Controller_DMA_APBPERI_AES                        (CPU_PERI_WORLD_CONTROLLER + 0x818)
++#define World_Controller_DMA_APBPERI_SHA                        (CPU_PERI_WORLD_CONTROLLER + 0x81C)
++#define World_Controller_DMA_APBPERI_ADC_DAC                    (CPU_PERI_WORLD_CONTROLLER + 0x820)
++#define World_Controller_DMA_APBPERI_USB                        (CPU_PERI_WORLD_CONTROLLER + 0x824)
++#define World_Controller_DMA_APBPERI_SDIO_HOST                  (CPU_PERI_WORLD_CONTROLLER + 0x828)
++#define World_Controller_DMA_APBPERI_MAC                        (CPU_PERI_WORLD_CONTROLLER + 0x82C)
++#define World_Controller_DMA_APBPERI_BACKUP                     (CPU_PERI_WORLD_CONTROLLER + 0x830)
++#define World_Controller_DMA_APBPERI_SLC                        (CPU_PERI_WORLD_CONTROLLER + 0x834)
++#define World_Controller_DMA_APBPERI_LC                         (CPU_PERI_WORLD_CONTROLLER + 0x838)
++#define World_Controller_EDMA_SPI2                              (CPU_PERI_WORLD_CONTROLLER + 0x900)
++#define World_Controller_EDMA_SPI3                              (CPU_PERI_WORLD_CONTROLLER + 0x904)
++#define World_Controller_EDMA_UCHI0                             (CPU_PERI_WORLD_CONTROLLER + 0x908)
++#define World_Controller_EDMA_I2S0                              (CPU_PERI_WORLD_CONTROLLER + 0x90C)
++#define World_Controller_EDMA_I2S1                              (CPU_PERI_WORLD_CONTROLLER + 0x910)
++#define World_Controller_EDMA_LCD_CAM                           (CPU_PERI_WORLD_CONTROLLER + 0x914)
++#define World_Controller_EDMA_AES                               (CPU_PERI_WORLD_CONTROLLER + 0x918)
++#define World_Controller_EDMA_SHA                               (CPU_PERI_WORLD_CONTROLLER + 0x91C)
++#define World_Controller_EDMA_ADC_DAC                           (CPU_PERI_WORLD_CONTROLLER + 0x920)
+diff --git a/components/soc/esp32c3/soc_memory_layout.c b/components/soc/esp32c3/soc_memory_layout.c
+index ba0ae819cba..bbdc10254f2 100644
+--- a/components/soc/esp32c3/soc_memory_layout.c
++++ b/components/soc/esp32c3/soc_memory_layout.c
+@@ -44,6 +44,10 @@ const soc_memory_type_desc_t soc_memory_types[] = {
+     { "IRAM", { MALLOC_CAP_EXEC | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL, 0, 0 }, false, false},
+     // Type 4: RTCRAM
+     { "RTCRAM", { MALLOC_CAP_8BIT|MALLOC_CAP_DEFAULT, MALLOC_CAP_INTERNAL|MALLOC_CAP_32BIT, 0 }, false, false},
++    // Type 5: WORLD0 DRAM
++    { "W0DRAM", { MALLOC_CAP_WORLD0 | MALLOC_CAP_8BIT, 0, 0 }, false, false},
++    // Type 6: WORLD1 DRAM
++    { "W1DRAM", { MALLOC_CAP_WORLD1 | MALLOC_CAP_8BIT, 0, 0 }, false, false},
+ };
+ 
+ #ifdef CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
+@@ -61,7 +65,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
+  *       this list should always be sorted from low to high by start address.
+  *
+  */
+-const soc_memory_region_t soc_memory_regions[] = {
++__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
+     { 0x3FC80000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
+     { 0x3FCA0000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
+     { 0x3FCC0000, 0x20000, 1, 0x403C0000}, //Block 9,  can be used as trace memory
+@@ -70,7 +74,7 @@ const soc_memory_region_t soc_memory_regions[] = {
+ #endif
+ };
+ 
+-const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
++__attribute__((weak)) const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
+ 
+ 
+ extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
+-- 
+2.24.3 (Apple Git-128)
+

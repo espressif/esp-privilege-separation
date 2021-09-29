@@ -1,0 +1,80 @@
+// Copyright 2020 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//         http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "syscall_wrappers.h"
+
+#include "soc/gpio_struct.h"
+#include "hal/gpio_types.h"
+#include "driver/gpio.h"
+#include "hal/gpio_ll.h"
+
+#define BUTTON_IO       9
+#define INTR_LED        2
+#define BLINK_GPIO      4
+
+static int g_state = 0;
+static usr_gpio_handle_t intr_gpio_handle;
+
+UIRAM_ATTR void user_gpio_isr(void *arg)
+{
+    int gpio_num = (int)arg;
+    if (g_state == 1) {
+        gpio_ll_set_level(&GPIO, gpio_num, 0);
+        g_state = 0;
+    } else {
+        gpio_ll_set_level(&GPIO, gpio_num, 1);
+        g_state = 1;
+    }
+}
+
+void blink_task()
+{
+    while (1) {
+        gpio_ll_set_level(&GPIO, BLINK_GPIO, 1);
+        usr_vTaskDelay(100);
+
+        gpio_ll_set_level(&GPIO, BLINK_GPIO, 0);
+        usr_vTaskDelay(100);
+    }
+}
+
+void user_main()
+{
+    gpio_config_t io_conf;
+    io_conf.pin_bit_mask = (1 << BLINK_GPIO);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    usr_gpio_config(&io_conf);
+
+    io_conf.pin_bit_mask = (1 << INTR_LED);
+    usr_gpio_config(&io_conf);
+
+    io_conf.pin_bit_mask = (1 << BUTTON_IO);
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.intr_type = GPIO_INTR_NEGEDGE;
+    io_conf.pull_up_en = 1;
+    usr_gpio_config(&io_conf);
+
+    usr_gpio_install_isr_service(0);
+    usr_gpio_isr_handler_add(BUTTON_IO, user_gpio_isr, (void*)INTR_LED, &intr_gpio_handle);
+
+    if (usr_xTaskCreate(blink_task, "Blink task", 4096, NULL, 1, NULL) != pdPASS) {
+        usr_printf("Task Creation failed\n");
+    }
+}
