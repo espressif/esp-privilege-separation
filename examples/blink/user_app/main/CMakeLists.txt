@@ -68,6 +68,8 @@ add_dependencies(${COMPONENT_LIB} user_linker_script)
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u _user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_app_desc")
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=printf -Wl,--defsym=__wrap_printf=usr_printf")
+target_link_libraries(${COMPONENT_LIB} INTERFACE "${DEFSYM_LIST}")
 
 add_prebuilt_library(esp_syscall ${SYSCALL_LIB})
 target_link_libraries(${COMPONENT_LIB} PUBLIC esp_syscall)

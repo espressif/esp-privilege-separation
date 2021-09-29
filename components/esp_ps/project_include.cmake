@@ -23,16 +23,35 @@ set(user_binary_files
 # builds after the top level target is built and compiled
 add_custom_target(protected_app DEPENDS ${build_dir}/${PROJECT_NAME}.elf)
 
+# Create a list of --defsym to translate APIs to their corresponding usr_* system calls
+# Execute the shell script in esp_syscall component and pass the list to user app build
+idf_component_get_property(esp_syscall_dir esp_syscall COMPONENT_DIR)
+
+set(syscalldefsym_sh
+    ${esp_syscall_dir}/syscall/syscalldefsym.sh ${esp_syscall_dir}/syscall/syscall.tbl
+    )
+
+execute_process(
+    COMMAND ${syscalldefsym_sh}
+    OUTPUT_VARIABLE defsym_list
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+set(DEFSYM_LIST ${defsym_list})
+
 # Build user_app as a subproject of the top level project. Pass all the relevant flags and file
 # through CMAKE_ARGS
 externalproject_add(user_app
     SOURCE_DIR "${PROJECT_DIR}/user_app"
     BINARY_DIR "${USER_BUILD_DIR}"
-    CMAKE_ARGS  -DSYSCALL_LIB=${SYSCALL_LIB} -DSDKCONFIG=${sdkconfig} -DCONFIG_DIR=${config_dir} 
+    CMAKE_ARGS  -DSYSCALL_LIB=${SYSCALL_LIB} -DDEFSYM_LIST=${DEFSYM_LIST}
+                -DSDKCONFIG=${sdkconfig} -DCONFIG_DIR=${config_dir}
                 -DIDF_PATH=${idf_path} -DIDF_TARGET=${idf_target}
                 -DPYTHON_DEPS_CHECKED=1 -DPYTHON=${python}
                 ${extra_cmake_args}
     INSTALL_COMMAND ""
+    # Uncomment BUILD_COMMAND to enable verbose logging while building user app
+    # BUILD_COMMAND ${CMAKE_COMMAND} --build ${USER_BUILD_DIR} -v
     BUILD_ALWAYS 1  # no easy way around this...
     BUILD_BYPRODUCTS ${user_binary_files}
     DEPENDS protected_app

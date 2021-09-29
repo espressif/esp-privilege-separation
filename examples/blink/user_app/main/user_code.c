@@ -45,10 +45,10 @@ void blink_task()
 {
     while (1) {
         gpio_ll_set_level(&GPIO, BLINK_GPIO, 1);
-        usr_vTaskDelay(100);
+        vTaskDelay(100);
 
         gpio_ll_set_level(&GPIO, BLINK_GPIO, 0);
-        usr_vTaskDelay(100);
+        vTaskDelay(100);
     }
 }
 
@@ -60,21 +60,21 @@ void user_main()
     io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
     io_conf.pull_down_en = 0;
     io_conf.pull_up_en = 0;
-    usr_gpio_config(&io_conf);
+    gpio_config(&io_conf);
 
     io_conf.pin_bit_mask = (1 << INTR_LED);
-    usr_gpio_config(&io_conf);
+    gpio_config(&io_conf);
 
     io_conf.pin_bit_mask = (1 << BUTTON_IO);
     io_conf.mode = GPIO_MODE_INPUT;
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
     io_conf.pull_up_en = 1;
-    usr_gpio_config(&io_conf);
+    gpio_config(&io_conf);
 
-    usr_gpio_install_isr_service(0);
+    gpio_install_isr_service(0);
     usr_gpio_isr_handler_add(BUTTON_IO, user_gpio_isr, (void*)INTR_LED, &intr_gpio_handle);
 
-    if (usr_xTaskCreate(blink_task, "Blink task", 4096, NULL, 1, NULL) != pdPASS) {
-        usr_printf("Task Creation failed\n");
+    if (xTaskCreate(blink_task, "Blink task", 4096, NULL, 1, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
     }
 }

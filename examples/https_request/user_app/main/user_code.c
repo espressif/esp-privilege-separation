@@ -28,6 +28,7 @@
 
 #include "esp_tls.h"
 
+#include "nvs_flash.h"
 #include "freertos/event_groups.h"
 #include "user_config.h"
 
@@ -62,18 +63,18 @@ UIRAM_ATTR void event_handler(void* arg, usr_esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT_BASE && event_id == WIFI_EVENT_STA_START) {
-        usr_esp_wifi_connect();
+        esp_wifi_connect();
     } else if (event_base == WIFI_EVENT_BASE && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (retries < 5) {
-            usr_esp_wifi_connect();
-            usr_printf("Retry to connect to the AP\n");
+            esp_wifi_connect();
+            printf("Retry to connect to the AP\n");
             retries++;
         } else {
-            usr_printf("Failed to connect to the AP\n");
-            usr_xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
+            printf("Failed to connect to the AP\n");
+            xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (event_base == IP_EVENT_BASE && event_id == IP_EVENT_STA_GOT_IP) {
-        usr_xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
@@ -81,28 +82,28 @@ esp_err_t usr_wifi_init()
 {
     wifi_init_config_t cfg;
 
-    int ret = usr_nvs_flash_init();
+    int ret = nvs_flash_init();
     if (ret != 0) {
-        usr_printf("Error nvs_flash_init: %d\n");
+        printf("Error nvs_flash_init: %d\n", ret);
         goto exit;
     }
 
-    ret |= usr_esp_netif_init();
+    ret |= esp_netif_init();
     if (ret != 0) {
-        usr_printf("usr_esp_netif_init failed: %d\n", ret);
+        printf("usr_esp_netif_init failed: %d\n", ret);
         goto exit;
     }
-    ret |= usr_esp_event_loop_create_default();
+    ret |= esp_event_loop_create_default();
     if (ret != 0) {
-        usr_printf("usr_event_loop_create_default failed: %d\n", ret);
+        printf("usr_event_loop_create_default failed: %d\n", ret);
         goto exit;
     }
 
-    usr_esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_sta();
 
-    ret |= usr_esp_wifi_init(&cfg);
+    ret |= esp_wifi_init(&cfg);
     if (ret != 0) {
-        usr_printf("usr_esp_wifi_init failed: %d\n", ret);
+        printf("usr_esp_wifi_init failed: %d\n", ret);
         goto exit;
     }
 
@@ -121,25 +122,25 @@ esp_err_t usr_wifi_init()
                                             NULL,
                                             &instance_got_ip);
 
-    ret |= usr_esp_wifi_set_mode(WIFI_MODE_STA);
+    ret |= esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret != 0) {
-        usr_printf("Ret: %d\n", ret);
+        printf("Ret: %d\n", ret);
         goto cleanup;
     }
 
-    ret |= usr_esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_conf);
+    ret |= esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_conf);
     if (ret != 0) {
-        usr_printf("Ret: %d\n", ret);
+        printf("Ret: %d\n", ret);
         goto cleanup;
     }
 
-    ret |= usr_esp_wifi_start();
+    ret |= esp_wifi_start();
     if (ret != 0) {
-        usr_printf("Ret: %d\n", ret);
+        printf("Ret: %d\n", ret);
         goto cleanup;
     }
 
-    EventBits_t bits = usr_xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
                 false, false, portMAX_DELAY);
 
     if (bits & WIFI_FAIL_BIT) {
@@ -159,12 +160,12 @@ static void https_request(esp_tls_cfg_t cfg)
     char buf[512];
     int ret, len = 0;
 
-    struct esp_tls *tls = usr_esp_tls_conn_http_new(WEB_URL, &cfg);
+    struct esp_tls *tls = esp_tls_conn_http_new(WEB_URL, &cfg);
 
     if (tls != NULL) {
-        usr_printf("Connection established...\n");
+        printf("Connection established...\n");
     } else {
-        usr_printf("Connection failed...\n");
+        printf("Connection failed...\n");
         goto exit;
     }
 
@@ -174,15 +175,15 @@ static void https_request(esp_tls_cfg_t cfg)
                                  REQUEST + written_bytes,
                                  sizeof(REQUEST) - written_bytes);
         if (ret >= 0) {
-            usr_printf("%d bytes written\n", ret);
+            printf("%d bytes written\n", ret);
             written_bytes += ret;
         } else if (ret != ESP_TLS_ERR_SSL_WANT_READ  && ret != ESP_TLS_ERR_SSL_WANT_WRITE) {
-            usr_printf("esp_tls_conn_write  returned: [0x%02X]\n", ret);
+            printf("esp_tls_conn_write  returned: [0x%02X]\n", ret);
             goto exit;
         }
     } while (written_bytes < sizeof(REQUEST));
 
-    usr_printf("Reading HTTP response...\n");
+    printf("Reading HTTP response...\n");
 
     do {
         len = sizeof(buf) - 1;
@@ -194,31 +195,31 @@ static void https_request(esp_tls_cfg_t cfg)
         }
 
         if (ret < 0) {
-            usr_printf("esp_tls_conn_read  returned [-0x%02X]\n", -ret);
+            printf("esp_tls_conn_read  returned [-0x%02X]\n", -ret);
             break;
         }
 
         if (ret == 0) {
-            usr_printf("Connection closed\n");
+            printf("Connection closed\n");
             break;
         }
 
         len = ret;
-        usr_printf("%d bytes read\n", len);
+        printf("%d bytes read\n", len);
         /* Print response directly to stdout as it is read */
         for (int i = 0; i < len; i++) {
-            usr_putchar(buf[i]);
+            putchar(buf[i]);
         }
-        usr_putchar('\n'); // JSON output doesn't have a newline at end
+        putchar('\n'); // JSON output doesn't have a newline at end
     } while (1);
 
 exit:
-    usr_esp_tls_conn_delete(tls);
+    esp_tls_conn_delete(tls);
 }
 
 void user_main()
 {
-    wifi_event_group = usr_xEventGroupCreate();
+    wifi_event_group = xEventGroupCreate();
     if(usr_wifi_init() == ESP_OK) {
         esp_tls_cfg_t cfg = {
             .cacert_buf = (const unsigned char *) server_root_cert_pem_start,
@@ -227,6 +228,6 @@ void user_main()
 
         https_request(cfg);
     } else {
-        usr_printf("WiFi initialization failed\n");
+        printf("WiFi initialization failed\n");
     }
 }

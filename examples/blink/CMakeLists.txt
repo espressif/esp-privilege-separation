@@ -11,9 +11,6 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 project(blink)
 
-# Build user_app as a subproject
-include(project_include.cmake)
-
 # Add user_app binary to the esptool flash arguments
 set(partition user_app)
 set(image_file ${PROJECT_DIR}/build/user_app/user_app.bin)

@@ -22,6 +22,10 @@ if(NOT SYSCALL_LIB)
     message(FATAL_ERROR "Path to prebuilt libesp_syscall.a missing from parent build process")
 endif()
 
+if (NOT DEFSYM_LIST)
+    message(FATAL_ERROR "DEFSYM_LIST missing from parent build process")
+endif()
+
 # Trim down the components since user app depends on these two
 set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../../../components/user_app_components)
 set(COMPONENTS esptool_py main)
@@ -38,5 +42,11 @@ idf_build_set_property(__COMPONENT_REQUIRES_COMMON "")
 # This is set in order to prevent sdkconfig to be overwritten
 # sdkconfig is derived from the protected_app
 idf_build_set_property(__OUTPUT_SDKCONFIG 0)
+
+# Compiler might optimize printf calls to puts which will generate linker errors
+# Disable printf optimization
+idf_build_set_property(COMPILE_OPTIONS "-nostdlib" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-fno-builtin" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-fno-inline" APPEND)
 
 project(user_app)

@@ -12,6 +12,8 @@ set(includes
    $ENV{IDF_PATH}/components/driver/include
    $ENV{IDF_PATH}/components/tcpip_adapter/include
    $ENV{IDF_PATH}/components/esp-tls
+   $ENV{IDF_PATH}/components/nvs_flash/include
+   $ENV{IDF_PATH}/components/spi_flash/include/
    ${PROJECT_DIR}/
    ${PROJECT_DIR}/../../../components/esp_syscall/include
    ${PROJECT_DIR}/../../../components/esp_ps/include
@@ -67,6 +69,8 @@ add_dependencies(${COMPONENT_LIB} user_linker_script)
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u _user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_app_desc")
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=printf -Wl,--defsym=__wrap_printf=usr_printf")
+target_link_libraries(${COMPONENT_LIB} INTERFACE "${DEFSYM_LIST}")
 
 add_prebuilt_library(esp_syscall ${SYSCALL_LIB})
 target_link_libraries(${COMPONENT_LIB} PUBLIC esp_syscall)
