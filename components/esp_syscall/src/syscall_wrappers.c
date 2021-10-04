@@ -350,6 +350,18 @@ void usr_esp_tls_conn_delete(esp_tls_t *tls)
 #pragma GCC diagnostic pop
 #endif
 
+unsigned int usr_strlen(const char *s)
+{
+    unsigned int count = 0;
+
+    while(*s!='\0')
+    {
+        count++;
+        s++;
+    }
+    return count;
+}
+
 void *usr_memset(void *src, int val, size_t size)
 {
 	size_t i;
