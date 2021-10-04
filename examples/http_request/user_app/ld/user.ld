@@ -25,6 +25,7 @@ SECTIONS
     *(.init.literal)
     *(.init)
     *( .uiram  .uiram.*)
+    *( .iram*)
 
 #if CONFIG_USER_CODE_IN_IRAM
     *(.text .text.* .literal .literal.*)
