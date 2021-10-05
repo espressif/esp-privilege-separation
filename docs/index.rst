@@ -18,4 +18,5 @@ Some additional highlights
 .. toctree::
    :maxdepth: 2
 
+   Technical Details <technical-details/index>
    API Reference <api-reference/index>
