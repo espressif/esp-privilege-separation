@@ -91,7 +91,8 @@ typedef enum {
     PS_PERM_ALL = 7,
 } esp_ps_perm_t;
 
-/* @brief Initialize PS component
+/**
+ * @brief Initialize PS component
  *
  * Configures various memory regions, sets split lines and permissions.
  * Enables interrupt for permission violation and registers user specified interrupt handler
@@ -104,7 +105,8 @@ typedef enum {
  */
 esp_err_t esp_ps_init(esp_ps_intr_handler_t fn);
 
-/* @brief Unpack, load and boot user app
+/**
+ * @brief Unpack, load and boot user app
  *
  * @return
  *      - ESP_OK on success
@@ -114,7 +116,8 @@ esp_err_t esp_ps_init(esp_ps_intr_handler_t fn);
  */
 esp_err_t esp_ps_user_boot();
 
-/* @brief Set entry to user space. When the entry address is fetched, CPU switches to user space
+/**
+ * @brief Set entry to user space. When the entry address is fetched, CPU switches to user space
  *
  * @param user_entry Pointer to user space code
  *
@@ -124,7 +127,8 @@ esp_err_t esp_ps_user_boot();
  */
 esp_err_t esp_ps_user_set_entry(void *user_entry);
 
-/* @brief Spawn a task that executes under user space
+/**
+ * @brief Spawn a task that executes under user space
  *
  * @param user_entry Pointer to task entry function
  * @param stack_sz Size of the task stack
@@ -135,7 +139,8 @@ esp_err_t esp_ps_user_set_entry(void *user_entry);
  */
 esp_err_t esp_ps_user_spawn_task(void *user_entry, uint32_t stack_sz);
 
-/* @brief Converts interrupt type to corresponding memory region string
+/**
+ * @brief Converts interrupt type to corresponding memory region string
  *
  * @param int_type Interrupt type, see esp_ps_int_t
  *
@@ -143,25 +148,29 @@ esp_err_t esp_ps_user_spawn_task(void *user_entry, uint32_t stack_sz);
  */
 char *esp_ps_int_type_to_str(esp_ps_int_t int_type);
 
-/* @brief Enable interrupt for a given violation type
+/**
+ * @brief Enable interrupt for a given violation type
  *
  * @param int_type Interrupt type, see esp_ps_int_t
  */
 void esp_ps_enable_int(esp_ps_int_t int_type);
 
-/* @brief Clear and re-enable interrupt for the given interrupt type
+/**
+ * @brief Clear and re-enable interrupt for the given interrupt type
  *
  * @param int_type Interrupt type, see esp_ps_int_t
  */
 void esp_ps_clear_and_reenable_int(esp_ps_int_t int_type);
 
-/* @brief Get the triggered violation interrupt, if any
+/**
+ * @brief Get the triggered violation interrupt, if any
  *
  * @return Interrupt type of triggered violation
  */
 esp_ps_int_t esp_ps_get_int_status();
 
-/* @brief Get the fault address that triggered violation interrupt
+/**
+ * @brief Get the fault address that triggered violation interrupt
  *
  * @param int_type Interrupt type, see esp_ps_int_t
  *
@@ -169,7 +178,8 @@ esp_ps_int_t esp_ps_get_int_status();
  */
 uint32_t esp_ps_get_fault_addr(esp_ps_int_t int_type);
 
-/* @brief Set the permissions for a specified peripheral under a WORLD
+/**
+ * @brief Set the permissions for a specified peripheral under a WORLD
  *
  * @param periph One of the supported peripheral, see esp_ps_periph_t
  * @param world WORLD under which the following permissions will be enforced
