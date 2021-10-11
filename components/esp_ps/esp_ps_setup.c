@@ -47,6 +47,8 @@ extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
 extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
 extern int _iram_end;
 
+static esp_ps_intr_handler_t intr_func;
+
 const soc_memory_region_t soc_memory_regions[] = {
     { 0x3FCA0000, 0x20000, 2, 0x403A0000},
     { 0x3FCC0000, 0x20000, 6, 0x403C0000},
@@ -88,13 +90,24 @@ static void esp_ps_pif_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_pif_get_int_source_num(), int_num);
 }
 
+static IRAM_ATTR void esp_ps_violation_intr_func(void *args)
+{
+    if (esp_ptr_executable(intr_func)) {
+        intr_func(args);
+    }
+
+    esp_ps_handle_crashed_task();
+}
+
 static esp_err_t esp_ps_int_init(esp_ps_intr_handler_t fn)
 {
     wcntl_ll_set_mtvec_base((uint32_t)&_vector_table);
 
     wcntl_ll_set_entry_check(0xFFFFFFFF);
 
-    intr_handler_set(RV_INT_NUM, fn, NULL);
+    intr_handler_set(RV_INT_NUM, esp_ps_violation_intr_func, NULL);
+
+    intr_func = fn;
 
     /* enable the interrupt in the INTC */
     esprv_intc_int_enable(BIT(RV_INT_NUM));

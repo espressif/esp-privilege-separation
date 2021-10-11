@@ -1,0 +1,23 @@
+menu "Privilege separation"
+
+    choice PS_VIOLATION_POLICY
+        prompt "User app violation policy"
+        default PS_DELETE_VIOLATING_TASK
+        help
+            Policy for handling permission violation of user task. In case any user task violates
+            its permission, handle the exception as per the policy selected
+
+        config PS_DELETE_VIOLATING_TASK
+            bool "Delete only the violating user task"
+        config PS_REBOOT_ENTIRE_SYSTEM
+            bool "Reboot entire system"
+    endchoice
+
+    config PS_BACKTRACE_INFO
+        bool "Print violating task backtrace info"
+        default y
+        help
+            If enabled, registers and stack dump of the violating user task will be printed on the console
+            This information can be further used by host utility (e.g idf_monitor) to generate a backtrace
+
+endmenu
