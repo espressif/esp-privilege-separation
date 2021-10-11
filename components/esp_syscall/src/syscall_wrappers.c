@@ -350,33 +350,10 @@ void usr_esp_tls_conn_delete(esp_tls_t *tls)
 #pragma GCC diagnostic pop
 #endif
 
-unsigned int usr_strlen(const char *s)
-{
-    unsigned int count = 0;
-
-    while(*s!='\0')
-    {
-        count++;
-        s++;
-    }
-    return count;
-}
-
-void *usr_memset(void *src, int val, size_t size)
-{
-	size_t i;
-
-	for (i = 0; i < size; i++) {
-        *(uint8_t *)src++ = val;
-    }
-
-	return src;
-}
-
 esp_err_t usr_clear_bss()
 {
     if ((&_user_bss_start >= (int *)SOC_UDRAM_LOW && &_user_bss_start < (int *)SOC_UDRAM_HIGH && &_user_bss_end < (int *)SOC_UDRAM_HIGH)) {
-        usr_memset(&_user_bss_start, 0, (&_user_bss_end - &_user_bss_start) * sizeof(_user_bss_start));
+        memset(&_user_bss_start, 0, (&_user_bss_end - &_user_bss_start) * sizeof(_user_bss_start));
         return 0;
     } else {
         return -1;

@@ -22,8 +22,6 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE "-u _user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_app_desc")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=printf -Wl,--defsym=__wrap_printf=usr_printf")
-target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=memset -Wl,--defsym=__wrap_memset=usr_memset")
-target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=strlen -Wl,--defsym=__wrap_strlen=usr_strlen")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "${DEFSYM_LIST}")
 
 add_prebuilt_library(esp_syscall ${SYSCALL_LIB})
