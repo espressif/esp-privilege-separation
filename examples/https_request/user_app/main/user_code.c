@@ -22,6 +22,7 @@
 #include "esp_event_base.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
+#include "esp_log.h"
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -50,6 +51,8 @@ static const char REQUEST[] = "GET " WEB_URL " HTTP/1.1\r\n"
 
 static EventGroupHandle_t wifi_event_group;
 
+static const char *TAG = "user_main";
+
 static int retries = 0;
 
 static wifi_config_t wifi_conf = {
@@ -67,10 +70,10 @@ UIRAM_ATTR void event_handler(void* arg, usr_esp_event_base_t event_base,
     } else if (event_base == WIFI_EVENT_BASE && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (retries < 5) {
             esp_wifi_connect();
-            printf("Retry to connect to the AP\n");
+            ESP_LOGI(TAG, "Retry to connect to the AP");
             retries++;
         } else {
-            printf("Failed to connect to the AP\n");
+            ESP_LOGE(TAG, "Failed to connect to the AP");
             xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (event_base == IP_EVENT_BASE && event_id == IP_EVENT_STA_GOT_IP) {
@@ -84,18 +87,18 @@ esp_err_t usr_wifi_init()
 
     int ret = nvs_flash_init();
     if (ret != 0) {
-        printf("Error nvs_flash_init: %d\n", ret);
+        ESP_LOGE(TAG, "Error nvs_flash_init: %d", ret);
         goto exit;
     }
 
     ret |= esp_netif_init();
     if (ret != 0) {
-        printf("usr_esp_netif_init failed: %d\n", ret);
+        ESP_LOGE(TAG, "usr_esp_netif_init failed: %d", ret);
         goto exit;
     }
     ret |= esp_event_loop_create_default();
     if (ret != 0) {
-        printf("usr_event_loop_create_default failed: %d\n", ret);
+        ESP_LOGE(TAG, "usr_event_loop_create_default failed: %d", ret);
         goto exit;
     }
 
@@ -103,7 +106,7 @@ esp_err_t usr_wifi_init()
 
     ret |= esp_wifi_init(&cfg);
     if (ret != 0) {
-        printf("usr_esp_wifi_init failed: %d\n", ret);
+        ESP_LOGE(TAG, "usr_esp_wifi_init failed: %d", ret);
         goto exit;
     }
 
@@ -124,19 +127,19 @@ esp_err_t usr_wifi_init()
 
     ret |= esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret != 0) {
-        printf("Ret: %d\n", ret);
+        ESP_LOGE(TAG, "Ret: %d", ret);
         goto cleanup;
     }
 
     ret |= esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_conf);
     if (ret != 0) {
-        printf("Ret: %d\n", ret);
+        ESP_LOGE(TAG, "Ret: %d", ret);
         goto cleanup;
     }
 
     ret |= esp_wifi_start();
     if (ret != 0) {
-        printf("Ret: %d\n", ret);
+        ESP_LOGE(TAG, "Ret: %d", ret);
         goto cleanup;
     }
 
@@ -163,9 +166,9 @@ static void https_request(esp_tls_cfg_t cfg)
     struct esp_tls *tls = esp_tls_conn_http_new(WEB_URL, &cfg);
 
     if (tls != NULL) {
-        printf("Connection established...\n");
+        ESP_LOGI(TAG, "Connection established...");
     } else {
-        printf("Connection failed...\n");
+        ESP_LOGE(TAG, "Connection failed...");
         goto exit;
     }
 
@@ -175,15 +178,15 @@ static void https_request(esp_tls_cfg_t cfg)
                                  REQUEST + written_bytes,
                                  sizeof(REQUEST) - written_bytes);
         if (ret >= 0) {
-            printf("%d bytes written\n", ret);
+            ESP_LOGI(TAG, "%d bytes written", ret);
             written_bytes += ret;
         } else if (ret != ESP_TLS_ERR_SSL_WANT_READ  && ret != ESP_TLS_ERR_SSL_WANT_WRITE) {
-            printf("esp_tls_conn_write  returned: [0x%02X]\n", ret);
+            ESP_LOGE(TAG, "esp_tls_conn_write  returned: [0x%02X]", ret);
             goto exit;
         }
     } while (written_bytes < sizeof(REQUEST));
 
-    printf("Reading HTTP response...\n");
+    ESP_LOGI(TAG, "Reading HTTP response...");
 
     do {
         len = sizeof(buf) - 1;
@@ -195,17 +198,17 @@ static void https_request(esp_tls_cfg_t cfg)
         }
 
         if (ret < 0) {
-            printf("esp_tls_conn_read  returned [-0x%02X]\n", -ret);
+            ESP_LOGE(TAG, "esp_tls_conn_read  returned [-0x%02X]", -ret);
             break;
         }
 
         if (ret == 0) {
-            printf("Connection closed\n");
+            ESP_LOGI(TAG, "Connection closed");
             break;
         }
 
         len = ret;
-        printf("%d bytes read\n", len);
+        ESP_LOGI(TAG, "%d bytes read", len);
         /* Print response directly to stdout as it is read */
         for (int i = 0; i < len; i++) {
             putchar(buf[i]);
@@ -228,6 +231,6 @@ void user_main()
 
         https_request(cfg);
     } else {
-        printf("WiFi initialization failed\n");
+        ESP_LOGE(TAG, "WiFi initialization failed");
     }
 }

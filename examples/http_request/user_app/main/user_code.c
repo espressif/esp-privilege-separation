@@ -22,6 +22,7 @@
 #include "esp_event_base.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
+#include "esp_log.h"
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -36,6 +37,8 @@
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
+
+static const char *TAG = "user_main";
 
 static EventGroupHandle_t wifi_event_group;
 
@@ -71,10 +74,10 @@ UIRAM_ATTR void event_handler(void* arg, usr_esp_event_base_t event_base,
     } else if (event_base == WIFI_EVENT_BASE && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (retries < 5) {
             esp_wifi_connect();
-            printf("Retry to connect to the AP\n");
+            ESP_LOGE(TAG, "Retry to connect to the AP");
             retries++;
         } else {
-            printf("Failed to connect to the AP\n");
+            ESP_LOGE(TAG, "Failed to connect to the AP");
             xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (event_base == IP_EVENT_BASE && event_id == IP_EVENT_STA_GOT_IP) {
@@ -88,18 +91,18 @@ esp_err_t usr_wifi_init()
 
     int ret = nvs_flash_init();
     if (ret != 0) {
-        printf("Error nvs_flash_init: %d\n", ret);
+        ESP_LOGE(TAG, "Error nvs_flash_init: %d", ret);
         goto exit;
     }
 
     ret |= esp_netif_init();
     if (ret != 0) {
-        printf("usr_esp_netif_init failed: %d\n", ret);
+        ESP_LOGE(TAG, "usr_esp_netif_init failed: %d", ret);
         goto exit;
     }
     ret |= esp_event_loop_create_default();
     if (ret != 0) {
-        printf("usr_event_loop_create_default failed: %d\n", ret);
+        ESP_LOGE(TAG, "usr_event_loop_create_default failed: %d", ret);
         goto exit;
     }
 
@@ -107,7 +110,7 @@ esp_err_t usr_wifi_init()
 
     ret |= esp_wifi_init(&cfg);
     if (ret != 0) {
-        printf("usr_esp_wifi_init failed: %d\n", ret);
+        ESP_LOGE(TAG, "usr_esp_wifi_init failed: %d", ret);
         goto exit;
     }
 
@@ -128,17 +131,17 @@ esp_err_t usr_wifi_init()
 
     ret |= esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret != 0) {
-        printf("Ret: %d\n", ret);
+        ESP_LOGE(TAG, "Ret: %d", ret);
         goto cleanup;
     }
     ret |= esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_conf);
     if (ret != 0) {
-        printf("Ret: %d\n", ret);
+        ESP_LOGE(TAG, "Ret: %d", ret);
         goto cleanup;
     }
     ret |= esp_wifi_start();
     if (ret != 0) {
-        printf("Ret: %d\n", ret);
+        ESP_LOGE(TAG, "Ret: %d", ret);
         goto cleanup;
     }
 
@@ -164,14 +167,14 @@ void http_request(void *args)
 
         s = socket(res->ai_family, res->ai_socktype, 0);
         if (s < 0) {
-            printf("Failed to allocate socket\n");
+            ESP_LOGE(TAG, "Failed to allocate socket");
             freeaddrinfo(res);
             vTaskDelay(100);
             continue;
         }
 
         if(connect(s, res->ai_addr, res->ai_addrlen) != 0) {
-            printf("Socket connect failed\n");
+            ESP_LOGE(TAG, "Socket connect failed");
             close(s);
             freeaddrinfo(res);
             vTaskDelay(100);
@@ -181,7 +184,7 @@ void http_request(void *args)
         freeaddrinfo(res);
 
         if (write(s, REQUEST, strlen(REQUEST)) < 0) {
-            printf("Write failed\n");
+            ESP_LOGE(TAG, "Write failed");
             close(s);
             vTaskDelay(100);
             continue;
@@ -198,7 +201,7 @@ void http_request(void *args)
         close(s);
 
         for (int i = 5; i > 0; i--) {
-            printf("Restarting in %d seconds\n", i);
+            ESP_LOGI(TAG, "Restarting in %d seconds", i);
             vTaskDelay(100);
         }
     }
@@ -209,9 +212,9 @@ void user_main()
     wifi_event_group = xEventGroupCreate();
     if(usr_wifi_init() == ESP_OK) {
         if (xTaskCreate(http_request, "HTTP request", 8192, NULL, 1, NULL) != pdPASS) {
-            printf("Task Creation failed\n");
+            ESP_LOGE(TAG, "Task Creation failed");
         }
     } else {
-        printf("WiFi initialization failed\n");
+        ESP_LOGE(TAG, "WiFi initialization failed");
     }
 }

@@ -22,12 +22,16 @@
 #include "driver/gpio.h"
 #include "hal/gpio_ll.h"
 
+#include "esp_log.h"
+
 #define BUTTON_IO       9
 #define INTR_LED        2
 #define BLINK_GPIO      4
 
 static int g_state = 0;
 static usr_gpio_handle_t intr_gpio_handle;
+
+static const char *TAG = "user_main";
 
 UIRAM_ATTR void user_gpio_isr(void *arg)
 {
@@ -75,6 +79,6 @@ void user_main()
     usr_gpio_isr_handler_add(BUTTON_IO, user_gpio_isr, (void*)INTR_LED, &intr_gpio_handle);
 
     if (xTaskCreate(blink_task, "Blink task", 4096, NULL, 1, NULL) != pdPASS) {
-        printf("Task Creation failed\n");
+        ESP_LOGE(TAG, "Task Creation failed");
     }
 }
