@@ -86,8 +86,8 @@ esp_err_t usr_esp_wifi_set_config(wifi_interface_t interface, wifi_config_t *con
 esp_err_t usr_esp_wifi_start();
 esp_err_t usr_esp_wifi_connect();
 
-int usr_getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **res, struct addrinfo *res_data);
-void usr_freeaddrinfo(struct addrinfo *ai);
+int usr_lwip_getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **res);
+void usr_lwip_freeaddrinfo(struct addrinfo *ai);
 int usr_lwip_socket(int domain, int type, int protocol);
 int usr_lwip_connect(int s, const struct sockaddr *name, socklen_t namelen);
 int usr_write(int s, const void *data, size_t size);

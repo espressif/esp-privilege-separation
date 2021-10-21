@@ -49,7 +49,6 @@ const struct addrinfo hints = {
         .ai_socktype = SOCK_STREAM,
 };
 static struct addrinfo *res;
-static struct addrinfo res_data;
 static int s, r;
 static char recv_buf[64];
 
@@ -161,9 +160,9 @@ exit:
 void http_request(void *args)
 {
     while(1) {
-        usr_getaddrinfo(WEB_SERVER, "80", &hints, &res, &res_data);
+        getaddrinfo(WEB_SERVER, "80", &hints, &res);
 
-        s = socket(res_data.ai_family, res_data.ai_socktype, 0);
+        s = socket(res->ai_family, res->ai_socktype, 0);
         if (s < 0) {
             printf("Failed to allocate socket\n");
             freeaddrinfo(res);
@@ -171,7 +170,7 @@ void http_request(void *args)
             continue;
         }
 
-        if(connect(s, res_data.ai_addr, res_data.ai_addrlen) != 0) {
+        if(connect(s, res->ai_addr, res->ai_addrlen) != 0) {
             printf("Socket connect failed\n");
             close(s);
             freeaddrinfo(res);

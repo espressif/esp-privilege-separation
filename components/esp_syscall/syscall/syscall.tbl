@@ -34,7 +34,7 @@
 25  common  esp_wifi_connect                        sys_esp_wifi_connect
 
 # Socket Programming
-26  custom  getaddrinfo                             sys_getaddrinfo
+26  common  lwip_getaddrinfo                        sys_getaddrinfo
 27  common  lwip_freeaddrinfo                       sys_freeaddrinfo
 28  common  lwip_socket                             sys_socket
 29  common  lwip_connect                            sys_connect

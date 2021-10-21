@@ -416,23 +416,39 @@ static esp_err_t sys_esp_wifi_connect()
 }
 
 static int sys_getaddrinfo(const char *nodename, const char *servname,
-       const struct addrinfo *hints, struct addrinfo **res, struct addrinfo *res_data)
+       const struct addrinfo *hints, struct addrinfo **res)
 {
     int ret;
-    ret = getaddrinfo(nodename, servname, hints, res);
+    struct addrinfo *tmp_res;
+    ret = getaddrinfo(nodename, servname, hints, &tmp_res);
     if (ret == 0) {
-        if (*res != NULL && is_valid_user_d_addr(res_data)) {
-            memcpy(res_data, *res, sizeof(struct addrinfo));
-        } else {
+        struct addrinfo *usr_res = heap_caps_malloc(NETDB_ELEM_SIZE, MALLOC_CAP_WORLD1);
+        if (!usr_res) {
+            freeaddrinfo(tmp_res);
             return -1;
         }
+        memcpy(usr_res, tmp_res, NETDB_ELEM_SIZE);
+        if (tmp_res->ai_next) {
+            ESP_LOGW(TAG, "More nodes in linked list..skipping");
+            usr_res->ai_next = NULL;
+        }
+        // Correct the location of ai_addr wrt user pointer. Data is already copied above by memcpy
+        usr_res->ai_addr = (struct sockaddr *)(void *)((u8_t *)usr_res + sizeof(struct addrinfo));
+
+        // Correct the location of nodename wrt user pointer. Data is already copied above by memcpy
+        usr_res->ai_canonname = ((char *)usr_res + sizeof(struct addrinfo) + sizeof(struct sockaddr_storage));
+
+        *res = usr_res;
+        freeaddrinfo(tmp_res);
     }
     return ret;
 }
 
 static void sys_freeaddrinfo(struct addrinfo *ai)
 {
-    freeaddrinfo(ai);
+    if(is_valid_user_d_addr((void *)ai)) {
+        free(ai);
+    }
 }
 
 static int sys_socket(int domain, int type, int protocol)

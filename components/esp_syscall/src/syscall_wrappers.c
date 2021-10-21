@@ -266,9 +266,9 @@ esp_err_t usr_esp_wifi_connect()
     return EXECUTE_SYSCALL(__NR_esp_wifi_connect);
 }
 
-int usr_getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **res, struct addrinfo *res_data)
+int usr_lwip_getaddrinfo(const char *nodename, const char *servname, const struct addrinfo *hints, struct addrinfo **res)
 {
-    return EXECUTE_SYSCALL(nodename, servname, hints, res, res_data, __NR_getaddrinfo);
+    return EXECUTE_SYSCALL(nodename, servname, hints, res, __NR_lwip_getaddrinfo);
 }
 
 void usr_lwip_freeaddrinfo(struct addrinfo *ai)
