@@ -88,6 +88,19 @@ build_tests:
     - mv ${CI_PIPELINE_ID}.tar.gz $CI_PROJECT_DIR/
     - popd
 
+build_docs:
+  stage: build
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
+  tags:
+    - build
+
+  script:
+    - python --version
+    - python -m pip install -r docs/requirements.txt
+    - pushd docs
+    - build-docs -t esp32c3 -l en
+    - popd
+
 run_tests:
   stage: test
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
