@@ -22,8 +22,8 @@ PROJECT_NAME = "Privilege Separation Programming Guide"
 
 INPUT = \
     ## ESP PS
-    ../components/esp_ps/include/esp_ps.h \
-    ../components/esp_ps/include/permc_ll.h
+    $(PROJECT_PATH)/components/esp_ps/include/esp_ps.h \
+    $(PROJECT_PATH)/components/esp_ps/include/permc_ll.h
 
 ## Get warnings for functions that have no documentation for their parameters or return value
 ##
