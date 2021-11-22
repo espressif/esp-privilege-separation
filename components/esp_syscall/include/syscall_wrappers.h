@@ -49,7 +49,7 @@ int usr_putchar(int c);
 int usr_printf(const char *fmt, ...);
 int usr_vprintf(const char *fmt, va_list arg);
 
-int usr_xTaskCreatePinnedToCore(TaskFunction_t pvTaskCode,
+TaskHandle_t usr_xTaskCreatePinnedToCore(TaskFunction_t pvTaskCode,
                                    const char * const pcName,
 			                       const uint32_t usStackDepth,
                                    void * const pvParameters,

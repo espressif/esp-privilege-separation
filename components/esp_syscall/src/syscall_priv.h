@@ -146,3 +146,10 @@ typedef struct {
     gpio_isr_t usr_isr;
     void *usr_args;
 } usr_gpio_args_t;
+
+typedef struct {
+    TimerCallbackFunction_t usr_cb;
+    void * usr_timer_id;
+    TimerHandle_t timerhandle;
+} usr_xtimer_context_t;
+

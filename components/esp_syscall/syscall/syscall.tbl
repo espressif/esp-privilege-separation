@@ -1,55 +1,154 @@
 0   custom  spill                                   sys_ni_syscall
 
+# ROM and Newlib
 1   common  putchar                                 sys_putchar
 2   common  vprintf                                 sys_vprintf
 
 # FreeRTOS
-3   common  xTaskCreatePinnedToCore                 sys_xTaskCreate
-4   common  vTaskDelete                             sys_vTaskDelete
-5   common  vTaskDelay                              sys_vTaskDelay
-6   common  xQueueGenericCreate                     sys_xQueueGenericCreate
-7   common  xQueueReceive                           sys_xQueueReceive
-8   common  xQueueSend                              sys_xQueueSend
-9   common  vQueueDelete                            sys_vQueueDelete
-10  common  xEventGroupCreate                       sys_xEventGroupCreate
-11  common  xEventGroupSetBits                      sys_xEventGroupSetBits
-12  common  xEventGroupClearBits                    sys_xEventGroupClearBits
-13  common  xEventGroupWaitBits                     sys_xEventGroupWaitBits
-14  common  vEventGroupDelete                       sys_vEventGroupDelete
+256  common  xTaskCreatePinnedToCore                 sys_xTaskCreate
+257  common  vTaskDelete                             sys_vTaskDelete
+258  common  vTaskDelay                              sys_vTaskDelay
+259  common  vTaskDelayUntil                         sys_vTaskDelayUntil
+260  common  uxTaskPriorityGet                       sys_uxTaskPriorityGet
+261  common  vTaskPrioritySet                        sys_vTaskPrioritySet
+262  common  uxTaskPriorityGetFromISR                sys_uxTaskPriorityGetFromISR
+263  common  vTaskSuspend                            sys_vTaskSuspend
 
-# ESP32 specific
-15  common  nvs_flash_init                          sys_nvs_flash_init
+264  common  vTaskResume                             sys_vTaskResume
+265  common  xTaskResumeFromISR                      sys_xTaskResumeFromISR
+266  common  xTaskAbortDelay                         sys_xTaskAbortDelay
+267  common  vPortYield                              sys_vPortYield
+268  common  vPortEnterCritical                      sys_vPortEnterCritical
+269  common  vPortExitCritical                       sys_vPortExitCritical
+270  common  vPortSetInterruptMask                   sys_vPortSetInterruptMask
+271  common  vPortClearInterruptMask                 sys_vPortClearInterruptMask
 
-# WiFi
-16  common  esp_netif_init                          sys_esp_netif_init
-17  common  esp_event_loop_create_default           sys_esp_event_loop_create_default
-18  common  esp_netif_create_default_wifi_sta       sys_esp_netif_create_default_wifi_sta
+272  common  vTaskSuspendAll                         sys_vTaskSuspendAll
+273  common  xTaskResumeAll                          sys_xTaskResumeAll
+274  common  vTaskStepTick                           sys_vTaskStepTick
 
-19  custom  esp_event_handler_instance_register     sys_esp_event_handler_instance_register
-20  custom  esp_event_handler_instance_unregister   sys_esp_event_handler_instance_unregister
-21  common  esp_wifi_init                           sys_esp_wifi_init
-22  common  esp_wifi_set_mode                       sys_esp_wifi_set_mode
-23  common  esp_wifi_set_config                     sys_esp_wifi_set_config
-24  common  esp_wifi_start                          sys_esp_wifi_start
-25  common  esp_wifi_connect                        sys_esp_wifi_connect
+275  common  xTaskGenericNotify                      sys_xTaskGenericNotify
+276  common  xTaskGenericNotifyFromISR               sys_xTaskGenericNotifyFromISR
+277  common  vTaskNotifyGiveFromISR                  sys_vTaskNotifyGiveFromISR
+278  common  ulTaskNotifyTake                        sys_ulTaskNotifyTake
+279  common  xTaskNotifyWait                         sys_xTaskNotifyWait
+280  common  xTaskNotifyStateClear                   sys_xTaskNotifyStateClear
+
+281  common  xTaskGetCurrentTaskHandle               sys_xTaskGetCurrentTaskHandle
+282  common  xTaskGetIdleTaskHandle                  sys_xTaskGetIdleTaskHandle
+283  common  uxTaskGetStackHighWaterMark             sys_uxTaskGetStackHighWaterMark
+284  common  eTaskGetState                           sys_eTaskGetState
+285  common  pcTaskGetName                           sys_pcTaskGetName
+286  common  xTaskGetHandle                          sys_xTaskGetHandle
+287  common  xTaskGetTickCount                       sys_xTaskGetTickCount
+288  common  xTaskGetTickCountFromISR                sys_xTaskGetTickCountFromISR
+289  common  xTaskGetSchedulerState                  sys_xTaskGetSchedulerState
+290  common  uxTaskGetNumberOfTasks                  sys_uxTaskGetNumberOfTasks
+
+291  common  xQueueGenericCreate                     sys_xQueueGenericCreate
+292  common  vQueueDelete                            sys_vQueueDelete
+293  common  xQueueGenericSend                       sys_xQueueGenericSend
+294  common  xQueueGenericSendFromISR                sys_xQueueGenericSendFromISR
+295  common  xQueueReceive                           sys_xQueueReceive
+296  common  xQueueReceiveFromISR                    sys_xQueueReceiveFromISR
+297  common  uxQueueMessagesWaiting                  sys_uxQueueMessagesWaiting
+298  common  uxQueueMessagesWaitingFromISR           sys_uxQueueMessagesWaitingFromISR
+299  common  uxQueueSpacesAvailable                  sys_uxQueueSpacesAvailable
+300  common  xQueueGenericReset                      sys_xQueueGenericReset
+301  common  xQueuePeek                              sys_xQueuePeek
+302  common  xQueuePeekFromISR                       sys_xQueuePeekFromISR
+303  common  xQueueIsQueueEmptyFromISR               sys_xQueueIsQueueEmptyFromISR
+304  common  xQueueIsQueueFullFromISR                sys_xQueueIsQueueFullFromISR
+
+305  common  xQueueCreateSet                         sys_xQueueCreateSet
+306  common  xQueueAddToSet                          sys_xQueueAddToSet
+307  common  xQueueRemoveFromSet                     sys_xQueueRemoveFromSet
+308  common  xQueueSelectFromSet                     sys_xQueueSelectFromSet
+309  common  xQueueSelectFromSetFromISR              sys_xQueueSelectFromSetFromISR
+
+310  common  xQueueCreateCountingSemaphore           sys_xQueueCreateCountingSemaphore
+311  common  xQueueCreateMutex                       sys_xQueueCreateMutex
+312  common  xQueueGetMutexHolder                    sys_xQueueGetMutexHolder
+313  common  xQueueSemaphoreTake                     sys_xQueueSemaphoreTake
+314  common  xQueueTakeMutexRecursive                sys_xQueueTakeMutexRecursive
+315  common  xQueueGiveMutexRecursive                sys_xQueueGiveMutexRecursive
+316  common  xQueueGiveFromISR                       sys_xQueueGiveFromISR
+
+317  common  xTimerCreate                            sys_xTimerCreate
+318  common  xTimerIsTimerActive                     sys_xTimerIsTimerActive
+319  common  pvTimerGetTimerID                       sys_pvTimerGetTimerID
+320  common  pcTimerGetName                          sys_pcTimerGetName
+321  common  vTimerSetReloadMode                     sys_vTimerSetReloadMode
+322  common  xTimerGenericCommand                    sys_xTimerGenericCommand
+323  common  vTimerSetTimerID                        sys_vTimerSetTimerID
+324  common  xTimerGetPeriod                         sys_xTimerGetPeriod
+325  common  xTimerGetExpiryTime                     sys_xTimerGetExpiryTime
+
+326  common  xEventGroupCreate                       sys_xEventGroupCreate
+327  common  xEventGroupWaitBits                     sys_xEventGroupWaitBits
+328  common  xEventGroupSetBits                      sys_xEventGroupSetBits
+329  common  xEventGroupClearBits                    sys_xEventGroupClearBits
+330  common  xEventGroupSync                         sys_xEventGroupSync
+331  common  vEventGroupDelete                       sys_vEventGroupDelete
 
 # Socket Programming
-26  common  lwip_getaddrinfo                        sys_getaddrinfo
-27  common  lwip_freeaddrinfo                       sys_freeaddrinfo
-28  common  lwip_socket                             sys_socket
-29  common  lwip_connect                            sys_connect
-30  common  write                                   sys_write
-31  common  read                                    sys_read
-32  common  close                                   sys_close
+512  common  lwip_socket                             sys_lwip_socket
+513  common  lwip_connect                            sys_lwip_connect
+514  common  lwip_accept                             sys_lwip_accept
+515  common  lwip_bind                               sys_lwip_bind
+516  common  lwip_shutdown                           sys_lwip_shutdown
+517  common  lwip_getaddrinfo                        sys_getaddrinfo
+518  common  lwip_freeaddrinfo                       sys_freeaddrinfo
+519  common  lwip_getpeername                        sys_lwip_getpeername
+520  common  lwip_getsockname                        sys_lwip_getsockname
+521  common  lwip_setsockopt                         sys_lwip_setsockopt
+522  common  lwip_getsockopt                         sys_lwip_getsockopt
+523  common  lwip_listen                             sys_lwip_listen
+524  common  lwip_recv                               sys_lwip_recv
+525  common  lwip_recvmsg                            sys_lwip_recvmsg
+526  common  lwip_recvfrom                           sys_lwip_recvfrom
+527  common  lwip_send                               sys_lwip_send
+528  common  lwip_sendmsg                            sys_lwip_sendmsg
+529  common  lwip_sendto                             sys_lwip_sendto
+530  common  lwip_inet_ntop                          sys_lwip_inet_ntop
+531  common  lwip_inet_pton                          sys_lwip_inet_pton
+532  common  lwip_htonl                              sys_lwip_htonl
+533  common  lwip_htons                              sys_lwip_htons
+
+# File operations
+768  common  open                                    sys_open
+769  common  write                                   sys_write
+770  common  read                                    sys_read
+771  common  close                                   sys_close
+772  common  select                                  sys_select
+773  common  poll                                    sys_poll
+774  common  ioctl                                   sys_ioctl
+775  common  fcntl                                   sys_fcntl
+
+# ESP32 specific
+1024  common  nvs_flash_init                          sys_nvs_flash_init
+
+# WiFi
+1025  common  esp_netif_init                          sys_esp_netif_init
+1026  common  esp_event_loop_create_default           sys_esp_event_loop_create_default
+1027  common  esp_netif_create_default_wifi_sta       sys_esp_netif_create_default_wifi_sta
+
+1028  custom  esp_event_handler_instance_register     sys_esp_event_handler_instance_register
+1029  custom  esp_event_handler_instance_unregister   sys_esp_event_handler_instance_unregister
+1030  common  esp_wifi_init                           sys_esp_wifi_init
+1031  common  esp_wifi_set_mode                       sys_esp_wifi_set_mode
+1032  common  esp_wifi_set_config                     sys_esp_wifi_set_config
+1033  common  esp_wifi_start                          sys_esp_wifi_start
+1034  common  esp_wifi_connect                        sys_esp_wifi_connect
 
 # GPIO specific
-33  common  gpio_config                             sys_gpio_config
-34  common  gpio_install_isr_service                sys_gpio_install_isr_service
-35  custom  gpio_isr_handler_add                    sys_gpio_isr_handler_add
-36  custom  gpio_isr_handler_remove                 sys_gpio_isr_handler_remove
+1035  common  gpio_config                             sys_gpio_config
+1036  common  gpio_install_isr_service                sys_gpio_install_isr_service
+1037  custom  gpio_isr_handler_add                    sys_gpio_isr_handler_add
+1038  custom  gpio_isr_handler_remove                 sys_gpio_isr_handler_remove
 
 # TLS
-37  common  esp_tls_conn_http_new                   sys_esp_tls_conn_http_new
-38  custom  esp_tls_conn_write                      sys_esp_tls_conn_write
-39  custom  esp_tls_conn_read                       sys_esp_tls_conn_read
-40  common  esp_tls_conn_delete                     sys_esp_tls_conn_delete
+1039  common  esp_tls_conn_http_new                   sys_esp_tls_conn_http_new
+1040  custom  esp_tls_conn_write                      sys_esp_tls_conn_write
+1041  custom  esp_tls_conn_read                       sys_esp_tls_conn_read
+1042  common  esp_tls_conn_delete                     sys_esp_tls_conn_delete
