@@ -151,7 +151,7 @@ cleanup:
     usr_esp_event_handler_instance_unregister(IP_EVENT_BASE, IP_EVENT_STA_GOT_IP, instance_got_ip);
     usr_esp_event_handler_instance_unregister(WIFI_EVENT_BASE, ESP_EVENT_ANY_ID, instance_any_id);
 exit:
-    usr_vEventGroupDelete(wifi_event_group);
+    vEventGroupDelete(wifi_event_group);
     return ret;
 }
 
