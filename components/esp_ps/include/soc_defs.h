@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include "soc/soc.h"
+
 /* WORLD1 range */
 #define SOC_UDRAM_LOW    0x3FCC0000
 #define SOC_UDRAM_HIGH   0x3FCDFFFF
