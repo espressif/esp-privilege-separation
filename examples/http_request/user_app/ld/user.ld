@@ -42,6 +42,8 @@ SECTIONS
   {
     _user_data_start = ABSOLUTE(.);
     *( .data  .data.*  .udram  .udram.*)
+    *( .sdata.*)
+    *( .sdata2.*)
     _user_data_end = ABSOLUTE(.);
 
     _user_bss_start = ABSOLUTE(.);
@@ -84,6 +86,7 @@ SECTIONS
 
     *(.rodata)
     *(.rodata.*)
+    *(.srodata.*)
     *(.dynamic)
     _user_rodata_end = ABSOLUTE(.);
 
