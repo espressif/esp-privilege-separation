@@ -67,9 +67,19 @@ int usr_putchar(int c)
     return EXECUTE_SYSCALL(c, __NR_putchar);
 }
 
-int usr_vprintf(const char *format, va_list arg)
+int usr_write_log_line(const char *str, size_t len)
 {
-    return EXECUTE_SYSCALL(format, arg, __NR_vprintf);
+    return EXECUTE_SYSCALL(str, len, __NR_write_log_line);
+}
+
+int usr_write_log_line_unlocked(const char *str, size_t len)
+{
+    return EXECUTE_SYSCALL(str, len, __NR_write_log_line_unlocked);
+}
+
+uint32_t usr_ets_get_cpu_frequency(void)
+{
+    return EXECUTE_SYSCALL(__NR_ets_get_cpu_frequency);
 }
 
 // Task Creation
@@ -847,13 +857,42 @@ void usr_esp_tls_conn_delete(esp_tls_t *tls)
 #pragma GCC diagnostic pop
 #endif
 
+int usr_vprintf(const char * fmt, va_list ap)
+{
+    int ret;
+    char *str_ptr = NULL;
+    ret = vasprintf(&str_ptr, fmt, ap);
+    assert(str_ptr != NULL);
+    ret = usr_write_log_line(str_ptr, ret);
+    free(str_ptr);
+    return ret;
+}
+
 int usr_printf(const char *fmt, ...)
 {
     int ret;
+    char *str_ptr = NULL;
     va_list ap = 0;
     va_start(ap, fmt);
-    ret = usr_vprintf(fmt, ap);
+    ret = vasprintf(&str_ptr, fmt, ap);
+    assert(str_ptr != NULL);
     va_end(ap);
+    ret = usr_write_log_line(str_ptr, ret);
+    free(str_ptr);
+    return ret;
+}
+
+int usr_ets_printf(const char *fmt, ...)
+{
+    int ret;
+    char *str_ptr = NULL;
+    va_list ap = 0;
+    va_start(ap, fmt);
+    ret = vasprintf(&str_ptr, fmt, ap);
+    assert(str_ptr != NULL);
+    va_end(ap);
+    ret = usr_write_log_line_unlocked(str_ptr, ret);
+    free(str_ptr);
     return ret;
 }
 

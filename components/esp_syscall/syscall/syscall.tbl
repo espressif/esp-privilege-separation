@@ -2,7 +2,9 @@
 
 # ROM and Newlib
 1   common  putchar                                 sys_putchar
-2   common  vprintf                                 sys_vprintf
+2   custom  write_log_line                          sys_write_log_line
+3   custom  write_log_line_unlocked                 sys_write_log_line_unlocked
+4   common  ets_get_cpu_frequency                   sys_ets_get_cpu_frequency
 
 # FreeRTOS
 256  common  xTaskCreatePinnedToCore                 sys_xTaskCreate

@@ -1,3 +1,4 @@
 0   common  ets_printf                              usr_ets_printf
 1   common  esp_rom_printf                          usr_ets_printf
 2   common  printf                                  usr_printf
+3   common  vprintf                                 usr_vprintf

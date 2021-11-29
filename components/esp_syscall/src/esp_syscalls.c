@@ -65,10 +65,31 @@ static int sys_putchar(int c)
     return putchar(c);
 }
 
-static int sys_vprintf(const char *format, va_list arg)
+static int sys_write_log_line(const char *str, size_t len)
 {
-    return vprintf(format, arg);
-};
+    if (!is_valid_user_d_addr((void *)str) ||
+        !is_valid_user_d_addr((void *)str + len)) {
+        return -1;
+    }
+    return fwrite(str, len, 1, __getreent()->_stdout);
+}
+
+static int sys_write_log_line_unlocked(const char *str, size_t len)
+{
+    if (!is_valid_user_d_addr((void *)str) ||
+        !is_valid_user_d_addr((void *)str + len)) {
+        return -1;
+    }
+    if (*(str + len) != '\0') {
+        return -1;
+    }
+    return ets_printf("%s", str);
+}
+
+static uint32_t sys_ets_get_cpu_frequency(void)
+{
+    return ets_get_cpu_frequency();
+}
 
 static int is_valid_user_task(TaskHandle_t xTask)
 {
