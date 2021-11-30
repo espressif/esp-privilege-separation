@@ -37,7 +37,14 @@
 
 #include "soc_defs.h"
 
+#include "esp_rom_md5.h"
+
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/ets_sys.h"
+#endif
+
 #if CONFIG_IDF_TARGET_ARCH_RISCV
+#include "riscv/interrupt.h"
 #include "riscv/rvruntime-frames.h"
 #include "ecall_context.h"
 #endif
@@ -89,6 +96,32 @@ static int sys_write_log_line_unlocked(const char *str, size_t len)
 static uint32_t sys_ets_get_cpu_frequency(void)
 {
     return ets_get_cpu_frequency();
+}
+
+static void sys_esp_rom_md5_init(md5_context_t *context)
+{
+    if (!is_valid_user_d_addr((void *)context)) {
+        return;
+    }
+    esp_rom_md5_init(context);
+}
+
+static void sys_esp_rom_md5_update(md5_context_t *context, const void *buf, uint32_t len)
+{
+    if (!is_valid_user_d_addr((void *)context) ||
+        !is_valid_user_d_addr((void *)buf)) {
+        return;
+    }
+    esp_rom_md5_update(context, buf, len);
+}
+
+static void sys_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
+{
+    if (!is_valid_user_d_addr((void *)digest) ||
+        !is_valid_user_d_addr((void *)context)) {
+        return;
+    }
+    esp_rom_md5_final(digest, context);
 }
 
 static int is_valid_user_task(TaskHandle_t xTask)
@@ -903,6 +936,11 @@ static u32_t sys_lwip_htonl(u32_t n)
 static u16_t sys_lwip_htons(u16_t n)
 {
     return lwip_htons(n);
+}
+
+static int *sys___errno(void)
+{
+    return __errno();
 }
 
 static int sys_open(const char *path, int flags, int mode)

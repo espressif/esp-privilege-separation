@@ -5,6 +5,9 @@
 2   custom  write_log_line                          sys_write_log_line
 3   custom  write_log_line_unlocked                 sys_write_log_line_unlocked
 4   common  ets_get_cpu_frequency                   sys_ets_get_cpu_frequency
+5   common  esp_rom_md5_init                        sys_esp_rom_md5_init
+6   common  esp_rom_md5_update                      sys_esp_rom_md5_update
+7   common  esp_rom_md5_final                       sys_esp_rom_md5_final
 
 # FreeRTOS
 256  common  xTaskCreatePinnedToCore                 sys_xTaskCreate
@@ -116,6 +119,7 @@
 531  common  lwip_inet_pton                          sys_lwip_inet_pton
 532  common  lwip_htonl                              sys_lwip_htonl
 533  common  lwip_htons                              sys_lwip_htons
+534  common  __errno                                 sys___errno
 
 # File operations
 768  common  open                                    sys_open

@@ -31,6 +31,12 @@
 
 #include "esp_tls.h"
 
+#include "esp_rom_md5.h"
+
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/ets_sys.h"
+#endif
+
 #ifndef XTSTR
 #define _XTSTR(x)	# x
 #define XTSTR(x)	_XTSTR(x)
@@ -93,6 +99,21 @@ int usr_write_log_line_unlocked(const char *str, size_t len)
 uint32_t usr_ets_get_cpu_frequency(void)
 {
     return EXECUTE_SYSCALL(__NR_ets_get_cpu_frequency);
+}
+
+void usr_esp_rom_md5_init(md5_context_t *context)
+{
+    EXECUTE_SYSCALL(context, __NR_esp_rom_md5_init);
+}
+
+void usr_esp_rom_md5_update(md5_context_t *context, const void *buf, uint32_t len)
+{
+    EXECUTE_SYSCALL(context, buf, len, __NR_esp_rom_md5_update);
+}
+
+void usr_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
+{
+    EXECUTE_SYSCALL(digest, context, __NR_esp_rom_md5_final);
 }
 
 // Task Creation
@@ -640,6 +661,11 @@ u32_t usr_lwip_htonl(u32_t n)
 u16_t usr_lwip_htons(u16_t n)
 {
     return EXECUTE_SYSCALL(n, __NR_lwip_htons);
+}
+
+int *usr___errno(void)
+{
+    return EXECUTE_SYSCALL(__NR___errno);
 }
 
 int usr_open(const char *path, int flags, int mode)
