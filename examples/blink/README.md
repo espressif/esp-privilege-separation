@@ -8,7 +8,7 @@ This demo example is split into Protected app and User app and following are the
     - Spawns a separate low privilege task with user entry point
     - Executes normally as `main_task` with higher privilege after setting up the user space application
 * User:
-    - Spawns a task which toggles GPIO4 each second
+    - Spawns a task which toggles GPIO4 each second and toggles WS2812 LED connected on GPIO8
     - Registers ISR on BOOT button (GPIO9) and when pressed, it toggles GPIO2
 
 ### Setting Up ESP-IDF

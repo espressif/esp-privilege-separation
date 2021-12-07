@@ -21,9 +21,11 @@
 #include "hal/gpio_types.h"
 #include "driver/gpio.h"
 #include "hal/gpio_ll.h"
+#include "ws2812.h"
 
 #include "esp_log.h"
 
+#define WS2812_GPIO     8
 #define BUTTON_IO       9
 #define INTR_LED        2
 #define BLINK_GPIO      4
@@ -47,11 +49,30 @@ UIRAM_ATTR void user_gpio_isr(void *arg)
 
 void blink_task()
 {
+    /* WS2812 LED expects data in multiple of 3. 3 bytes for 1 LED
+     * The data format is {R, G, B}, with intensity ranging from 0 - 255.
+     * 0 being dimmest (off) and 255 being the brightest
+     */
+    uint8_t data_on[3] = {0, 8, 8};
+    uint8_t data_off[3] = {0, 0, 0};
+
+    ws2812_dev_conf_t dev_cnf = {
+        .channel = 0,
+        .gpio_num = WS2812_GPIO,
+        .led_cnt = 1
+    };
+
+    int ws2812_fd = open("/dev/ws2812/0", O_WRONLY);
+
+    ioctl(ws2812_fd, WS2812_INIT, &dev_cnf);
+
     while (1) {
         gpio_ll_set_level(&GPIO, BLINK_GPIO, 1);
+        write(ws2812_fd, data_on, 3);
         vTaskDelay(100);
 
         gpio_ll_set_level(&GPIO, BLINK_GPIO, 0);
+        write(ws2812_fd, data_off, 3);
         vTaskDelay(100);
     }
 }

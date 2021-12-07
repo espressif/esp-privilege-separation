@@ -26,6 +26,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_ps.h"
+#include "ws2812.h"
 
 #define TAG             "protected_app"
 
@@ -44,6 +45,8 @@ IRAM_ATTR void app_main()
     }
 
     esp_ps_set_periph_perm(PS_GPIO, PS_WORLD_1, PS_PERM_ALL);
+
+    esp_ws2812_device_register("/dev/ws2812");
 
     ret = esp_ps_user_boot();
     if (ret != ESP_OK) {
