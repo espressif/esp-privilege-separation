@@ -79,9 +79,16 @@ __ecall_handler:
 	sw      t6, RV_ESTK_MTVAL(sp)
 
     /* Save interrupt threshold level */
+    /* No need for saving/restoring the interrupt threshold
+     * as the ecall handler is not an interrupt but an exception.
+     * ecall handler simply enables/disables the global interrupts.
+     * The system call runs in the non ISR context so no need to increase the interrupt threshold
+     */
+    /*
 	la      t2, INTERRUPT_CORE0_CPU_INT_THRESH_REG
     lw      t3, 0x00(t2)
     sw      t3, RV_ESTK_INT_THRESH(sp)
+    */
 
     /* Enable WC-MIE */
 	la		t2, WORLD_CONTROL_CORE_X_MSTATUS_MIE(0)
@@ -110,9 +117,11 @@ __ecall_handler:
 	csrc    mstatus, t2
 
 	/* restore the interrupt threshold level */
+    /* See comment above saving/restoring threshold
 	la      t3, INTERRUPT_CORE0_CPU_INT_THRESH_REG
     lw      t4, RV_ESTK_INT_THRESH(sp)
 	sw      t4, 0x0(t3)
+    */
 	fence
 
     /* Restore machine registers */
