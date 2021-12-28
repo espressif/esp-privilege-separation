@@ -66,6 +66,10 @@ build_examples:
     - pushd $CI_PROJECT_DIR/examples/https_request
     - idf.py build
     - popd
+    # Build esp_http_client
+    - pushd $CI_PROJECT_DIR/examples/esp_http_client
+    - idf.py build
+    - popd
 
 build_tests:
   stage: build
