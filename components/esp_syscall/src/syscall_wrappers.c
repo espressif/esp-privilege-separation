@@ -38,6 +38,8 @@
 
 extern int _user_bss_start;
 extern int _user_bss_end;
+extern int _user_heap_start;
+extern int _user_data_start;
 extern void user_main(void);
 
 static QueueHandle_t usr_gpio_isr_queue;
@@ -58,8 +60,19 @@ static uint8_t _timer_count;
 
 /* Reserve 256 bytes for user app descriptor required by esptool while generating user app binary.
  * esptool inserts SHA256 at 144th offset, so it needs to be all zeros
+ *
+ * Not required to explicitly reserve because app_update component is now included in the user_app
  */
-const __attribute__((section(".rodata_desc"))) uint8_t user_app_desc[256];
+//const __attribute__((section(".rodata_desc"))) uint8_t user_app_desc[256];
+
+/* Embed _user_data_start and _user_heap_start as custom_app_desc in the user_app binary.
+ * Due to its fixed offset (sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)),
+ * it can be parsed by protected app to add the heap region for user app
+ */
+const __attribute__((section(".rodata_custom_desc"))) usr_custom_app_desc_t custom_app_desc = {
+    .user_app_dram_start = (int)&_user_data_start,
+    .user_app_heap_start = (int)&_user_heap_start,
+};
 
 // ROM and Newlib
 int usr_putchar(int c)
@@ -933,7 +946,7 @@ int usr_ets_printf(const char *fmt, ...)
 
 esp_err_t usr_clear_bss()
 {
-    if ((&_user_bss_start >= (int *)SOC_UDRAM_LOW && &_user_bss_start < (int *)SOC_UDRAM_HIGH && &_user_bss_end < (int *)SOC_UDRAM_HIGH)) {
+    if (is_valid_udram_addr(&_user_bss_start) && is_valid_udram_addr(&_user_bss_end)) {
         memset(&_user_bss_start, 0, (&_user_bss_end - &_user_bss_start) * sizeof(_user_bss_start));
         return 0;
     } else {

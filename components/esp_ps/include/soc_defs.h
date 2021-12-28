@@ -17,12 +17,6 @@
 #include "soc/soc.h"
 
 /* WORLD1 range */
-#define SOC_UDRAM_LOW    0x3FCC0000
-#define SOC_UDRAM_HIGH   0x3FCDFFFF
-
-#define SOC_UIRAM_LOW    0x40390000
-#define SOC_UIRAM_HIGH   0x4039FFFF
-
 #define SOC_UDROM_LOW    0x3C400000
 #define SOC_UDROM_HIGH   0x3C800000
 
@@ -40,9 +34,17 @@
 
 #ifndef __ASSEMBLER__
 
+extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
+extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
+
+typedef struct {
+    uint32_t user_app_dram_start;
+    uint32_t user_app_heap_start;
+} usr_custom_app_desc_t;
+
 static inline int is_valid_uiram_addr(void *ptr)
 {
-    if (ptr >= (void *)SOC_UIRAM_LOW && ptr < (void *)SOC_UIRAM_HIGH) {
+    if (ptr >= (void *)&_reserve_w1_iram_start && ptr < (void *)&_reserve_w1_iram_end) {
         return 1;
     }
 
@@ -51,7 +53,7 @@ static inline int is_valid_uiram_addr(void *ptr)
 
 static inline int is_valid_udram_addr(void *ptr)
 {
-    if (ptr >= (void *)SOC_UDRAM_LOW && ptr < (void *)SOC_UDRAM_HIGH) {
+    if (ptr >= (void *)&_reserve_w1_dram_start && ptr < (void *)&_reserve_w1_dram_end) {
         return 1;
     }
 
@@ -64,11 +66,7 @@ static inline int is_valid_user_i_addr(void *ptr)
         return 1;
     }
 
-    if (ptr >= (void *)SOC_UIRAM_LOW && ptr < (void *)SOC_UIRAM_HIGH) {
-        return 1;
-    }
-
-    return 0;
+    return is_valid_uiram_addr(ptr);
 }
 
 static inline int is_valid_user_d_addr(void *ptr)
@@ -77,11 +75,7 @@ static inline int is_valid_user_d_addr(void *ptr)
         return 1;
     }
 
-    if (ptr >= (void *)SOC_UDRAM_LOW && ptr < (void *)SOC_UDRAM_HIGH) {
-        return 1;
-    }
-
-    return 0;
+    return is_valid_udram_addr(ptr);
 }
 
 static inline int is_valid_kernel_i_addr(void *ptr)

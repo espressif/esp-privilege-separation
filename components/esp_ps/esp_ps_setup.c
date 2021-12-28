@@ -35,11 +35,10 @@
 #include "hal/memprot_ll.h"
 #include "esp32c3/memprot.h"
 #include "esp32c3/rom/cache.h"
+#include "esp_heap_caps_init.h"
 
 #define TAG             "esp_ps"
 #define RV_INT_NUM      2
-
-#define CONFIG_W1_DRAM_DATA_SIZE     0x10000
 
 extern intptr_t _vector_table;
 
@@ -49,17 +48,7 @@ extern int _iram_end;
 
 static esp_ps_intr_handler_t intr_func;
 
-const soc_memory_region_t soc_memory_regions[] = {
-    { 0x3FCA0000, 0x20000, 2, 0x403A0000},
-    { 0x3FCC0000, 0x20000, 6, 0x403C0000},
-#ifdef CONFIG_ESP_SYSTEM_ALLOW_RTC_FAST_MEM_AS_HEAP
-    { 0x50000000, 0x2000,  4, 0},
-#endif
-};
-
-const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
-
-SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_start + CONFIG_W1_DRAM_DATA_SIZE, world1_dram);
+SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_end, world1_dram);
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_iram_start, (int)&_reserve_w1_iram_end, world1_iram);
 
 static void esp_ps_iram_int_en(uint8_t int_num)
@@ -276,6 +265,32 @@ esp_err_t esp_ps_user_set_entry(void *user_entry)
     return ESP_OK;
 }
 
+static void register_heap()
+{
+    usr_custom_app_desc_t app_desc;
+    const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
+
+    if (user_partition == NULL) {
+        ESP_LOGE(TAG, "User code partition not found");
+        return;
+    }
+
+    uint32_t offset = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t);
+
+    esp_partition_read(user_partition, offset, &app_desc, sizeof(usr_custom_app_desc_t));
+
+    /* Sanity check. user_app_dram_start has to be equal to _reserve_w1_dram_start
+     * If otherwise, probably a case of stale build. assert !
+     */
+    assert(app_desc.user_app_dram_start == (int)&_reserve_w1_dram_start);
+
+    uint32_t w1_caps[] = {MALLOC_CAP_WORLD1, 0, 0};
+    uint32_t w1_heap_size = (int)&_reserve_w1_dram_end - app_desc.user_app_heap_start;
+    heap_caps_add_region_with_caps(w1_caps, app_desc.user_app_heap_start, (int)&_reserve_w1_dram_end);
+
+    ESP_LOGI(TAG, "heap: At %08X len %08X (%d KiB): W1DRAM", app_desc.user_app_heap_start, w1_heap_size, w1_heap_size / 1024);
+}
+
 IRAM_ATTR esp_err_t esp_ps_user_boot()
 {
     esp_image_metadata_t user_img_data = {0};
@@ -284,6 +299,7 @@ IRAM_ATTR esp_err_t esp_ps_user_boot()
         void *user_entry = (void *)user_img_data.image.entry_addr;
         ret = esp_ps_user_set_entry(user_entry);
         if (ret == ESP_OK) {
+            register_heap();
             ret = esp_ps_user_spawn_task(user_entry, 4096);
         }
     }

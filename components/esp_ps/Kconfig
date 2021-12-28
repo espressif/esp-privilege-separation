@@ -1,5 +1,41 @@
 menu "Privilege separation"
 
+    menu "Memory allocation"
+
+    config PS_ALLOCATE_USER_IRAM_SIZE
+        hex "Allocate IRAM space for user application"
+        range 0 0x10000
+        default 0x800
+        help
+            Allocate IRAM for user space application. This size will reflect in the user_app as well.
+            This is the size of IRAM that would be dedicated for user space code.
+
+    choice PS_MEMORY_ALLOCATION_POLICY
+        prompt "Memory allocation policy"
+        default PS_MEMORY_ALLOCATE_USER
+        help
+            Choose the DRAM memory allocation policy.
+            Either allocate DRAM memory for protected app or for user app. The size configured by PS_ALLOCATE_DRAM_SIZE will be
+            allocated to the chosen execution environment and the remaining DRAM memory will be allocated
+            to the other execution environment.
+
+        config PS_MEMORY_ALLOCATE_PROTECTED
+            bool "Allocate to protected app"
+
+        config PS_MEMORY_ALLOCATE_USER
+            bool "Allocate to user app"
+    endchoice
+
+    config PS_ALLOCATE_DRAM_SIZE
+        hex "Allocate DRAM space for chosen execution environment"
+        range 0 0x40000
+        default 0x19000
+        help
+            Allocate DRAM for the chosen execution environment (i.e protected or user)
+
+            This DRAM size is for data, bss and heap memory combined.
+    endmenu
+
     choice PS_VIOLATION_POLICY
         prompt "User app violation policy"
         default PS_DELETE_VIOLATING_TASK
