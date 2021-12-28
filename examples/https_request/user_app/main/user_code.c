@@ -174,7 +174,7 @@ static void https_request(esp_tls_cfg_t cfg)
 
     size_t written_bytes = 0;
     do {
-        ret = usr_esp_tls_conn_write(tls,
+        ret = esp_tls_conn_write(tls,
                                  REQUEST + written_bytes,
                                  sizeof(REQUEST) - written_bytes);
         if (ret >= 0) {
@@ -191,7 +191,7 @@ static void https_request(esp_tls_cfg_t cfg)
     do {
         len = sizeof(buf) - 1;
         memset(buf, 0x0, sizeof(buf));
-        ret = usr_esp_tls_conn_read(tls, (char *)buf, len);
+        ret = esp_tls_conn_read(tls, (char *)buf, len);
 
         if (ret == ESP_TLS_ERR_SSL_WANT_WRITE  || ret == ESP_TLS_ERR_SSL_WANT_READ) {
             continue;
@@ -220,16 +220,28 @@ exit:
     esp_tls_conn_delete(tls);
 }
 
+static void https_request_task(void *arg)
+{
+    esp_tls_cfg_t cfg = {
+        .cacert_buf = (const unsigned char *) server_root_cert_pem_start,
+        .cacert_bytes = server_root_cert_pem_end - server_root_cert_pem_start,
+    };
+
+    while (1) {
+        https_request(cfg);
+        for (int i = 5; i > 0; i--) {
+            ESP_LOGI(TAG, "Restarting in %d seconds", i);
+            vTaskDelay(100);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
 void user_main()
 {
     wifi_event_group = xEventGroupCreate();
     if(usr_wifi_init() == ESP_OK) {
-        esp_tls_cfg_t cfg = {
-            .cacert_buf = (const unsigned char *) server_root_cert_pem_start,
-            .cacert_bytes = server_root_cert_pem_end - server_root_cert_pem_start,
-        };
-
-        https_request(cfg);
+        xTaskCreate(https_request_task, "HTTPS request task", 8 * 1024, NULL, 5, NULL);
     } else {
         ESP_LOGE(TAG, "WiFi initialization failed");
     }
