@@ -12,7 +12,7 @@ set(LD_DIR ${PROJECT_DIR}/ld)
 
 add_custom_command(
     OUTPUT user_out.ld
-    COMMAND "${CMAKE_C_COMPILER}" -C -P -x c -E -o user_out.ld -I ${PROJECT_DIR} ${LD_DIR}/user.ld
+    COMMAND "${CMAKE_C_COMPILER}" -C -P -x c -E -o user_out.ld -I ${PROTECTED_CONFIG_DIR} -I ${PROJECT_DIR} ${LD_DIR}/user.ld
     MAIN_DEPENDENCY ${LD_DIR}/user.ld ${PROJECT_DIR}/user_config.h
     COMMENT "Generating linker script..."
     VERBATIM)
@@ -23,6 +23,7 @@ add_dependencies(${COMPONENT_LIB} user_linker_script)
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u _user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_main")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_app_desc")
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-u custom_app_desc")
 target_link_libraries(${COMPONENT_LIB} INTERFACE "${DEFSYM_LIST}")
 
 add_prebuilt_library(esp_syscall ${SYSCALL_LIB})

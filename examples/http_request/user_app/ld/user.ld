@@ -1,14 +1,15 @@
 #include "user_config.h"
+#include "memory_layout.h"
 
 ENTRY(_user_main);
 
 MEMORY
 {
-    iram_seg (RX) : org = 0x40390000,
-                len = 0x10000
+    iram_seg (RX) : org = USER_IRAM_START,
+                len = USER_IRAM_END - USER_IRAM_START
 
-    dram_seg (RW) : org = 0x3FCC0000,
-                len = 0x20000
+    dram_seg (RW) : org = USER_DRAM_START,
+                len = USER_DRAM_END - USER_DRAM_START
 
     drom_seg (R) : org = 0x3C400020,
                len = 0x400000 - 0x20
@@ -22,6 +23,7 @@ SECTIONS
   .uiram :
   {
     _user_text_start = ABSOLUTE(.);
+    _reserve_w1_iram_start = ABSOLUTE(.);
     *(.init.literal)
     *(.init)
     *( .uiram  .uiram.*)
@@ -34,6 +36,7 @@ SECTIONS
     *(.fini.literal)
     *(.fini)
     _user_text_end = ABSOLUTE(.);
+    _reserve_w1_iram_end = ORIGIN(iram_seg) + LENGTH(iram_seg);
   } > iram_seg
 
   ASSERT(((_user_text_end - ORIGIN(iram_seg)) <= LENGTH(iram_seg)), "User IRAM does not fit.")
@@ -41,11 +44,17 @@ SECTIONS
   .data :
   {
     _user_data_start = ABSOLUTE(.);
+    _reserve_w1_dram_start = ABSOLUTE(.);
+    *( .sdata.*)
+    *( .sdata2.*)
     *( .data  .data.*  .udram  .udram.*)
     *( .sdata.*)
     *( .sdata2.*)
     _user_data_end = ABSOLUTE(.);
+  } > dram_seg
 
+  .bss (NOLOAD) :
+  {
     _user_bss_start = ABSOLUTE(.);
 
     *( .bss  .bss.*  COMMON .sbss .sbss.*)
@@ -54,6 +63,7 @@ SECTIONS
     _user_bss_end = ABSOLUTE(.);
     /* The heap starts right after end of this section */
     _user_heap_start = ABSOLUTE(.);
+    _reserve_w1_dram_end = ORIGIN(dram_seg) + LENGTH(dram_seg);
   } > dram_seg
 
   ASSERT(((_user_bss_end - ORIGIN(dram_seg)) <= LENGTH(dram_seg)), "User DRAM does not fit.")
@@ -98,4 +108,5 @@ SECTIONS
 
     . = ALIGN(4);
   } > drom_seg
+
 }

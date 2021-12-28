@@ -14,7 +14,7 @@ if (NOT SDKCONFIG)
     message(FATAL_ERROR "SDKCONFIG missing from parent build process")
 endif()
 
-if(NOT CONFIG_DIR)
+if(NOT PROTECTED_CONFIG_DIR)
     message(FATAL_ERROR "CONFIG_DIR missing from parent build process")
 endif()
 
@@ -34,7 +34,7 @@ set(EXTRA_COMPONENT_DIRS ${ROOT_DIR}/components ${ROOT_DIR}/components/user_app_
 include(${IDF_PATH}/tools/cmake/project.cmake)
 
 # Include sdkconfig.h derived from the protected_app build.
-include_directories(${CONFIG_DIR})
+include_directories(${PROTECTED_CONFIG_DIR})
 
 # This is set in order to prevent sdkconfig to be overwritten
 # sdkconfig is derived from the protected_app
