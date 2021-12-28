@@ -153,14 +153,8 @@
 1037  custom  gpio_isr_handler_add                    sys_gpio_isr_handler_add
 1038  custom  gpio_isr_handler_remove                 sys_gpio_isr_handler_remove
 
-# TLS
-1039  common  esp_tls_conn_http_new                   sys_esp_tls_conn_http_new
-1040  custom  esp_tls_conn_write                      sys_esp_tls_conn_write
-1041  custom  esp_tls_conn_read                       sys_esp_tls_conn_read
-1042  common  esp_tls_conn_delete                     sys_esp_tls_conn_delete
-
 # Memory allocation
-1043  common  malloc                                  sys_malloc
-1044  common  calloc                                  sys_calloc
-1045  common  free                                    sys_free
-1046  common  realloc                                 sys_realloc
+1039  common  malloc                                  sys_malloc
+1040  common  calloc                                  sys_calloc
+1041  common  free                                    sys_free
+1042  common  realloc                                 sys_realloc

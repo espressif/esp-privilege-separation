@@ -24,7 +24,6 @@
 #include "driver/gpio.h"
 
 #include "esp_event.h"
-#include "esp_tls.h"
 
 typedef void* usr_esp_event_handler_instance_t;
 typedef void* usr_gpio_handle_t;
@@ -54,7 +53,3 @@ esp_err_t usr_esp_event_handler_instance_unregister(usr_esp_event_base_t event_b
 esp_err_t usr_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle);
 
 esp_err_t usr_gpio_isr_handler_remove(usr_gpio_handle_t gpio_handle);
-
-ssize_t usr_esp_tls_conn_write(esp_tls_t *tls, const void *data, size_t datalen);
-
-ssize_t usr_esp_tls_conn_read(esp_tls_t *tls, void  *data, size_t datalen);

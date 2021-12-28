@@ -29,8 +29,6 @@
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 
-#include "esp_tls.h"
-
 #include "esp_rom_md5.h"
 
 #ifdef CONFIG_IDF_TARGET_ESP32C3
@@ -870,26 +868,6 @@ esp_err_t usr_esp_wifi_start()
 esp_err_t usr_esp_wifi_connect()
 {
     return EXECUTE_SYSCALL(__NR_esp_wifi_connect);
-}
-
-esp_tls_t *usr_esp_tls_conn_http_new(const char *url, const esp_tls_cfg_t *cfg)
-{
-    return EXECUTE_SYSCALL(url, cfg, __NR_esp_tls_conn_http_new);
-}
-
-ssize_t usr_esp_tls_conn_write(esp_tls_t *tls, const void *data, size_t datalen)
-{
-    return EXECUTE_SYSCALL(tls, data, datalen, __NR_esp_tls_conn_write);
-}
-
-ssize_t usr_esp_tls_conn_read(esp_tls_t *tls, void  *data, size_t datalen)
-{
-    return EXECUTE_SYSCALL(tls, data, datalen, __NR_esp_tls_conn_read);
-}
-
-void usr_esp_tls_conn_delete(esp_tls_t *tls)
-{
-    EXECUTE_SYSCALL(tls, __NR_esp_tls_conn_delete);
 }
 
 void *usr_malloc(size_t size)

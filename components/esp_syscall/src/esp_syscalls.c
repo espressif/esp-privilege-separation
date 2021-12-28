@@ -33,8 +33,6 @@
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 
-#include "esp_tls.h"
-
 #include "soc_defs.h"
 
 #include "esp_rom_md5.h"
@@ -1217,39 +1215,6 @@ static esp_err_t sys_esp_wifi_start()
 static esp_err_t sys_esp_wifi_connect()
 {
     return esp_wifi_connect();
-}
-
-static esp_tls_t *sys_esp_tls_conn_http_new(const char *url, const esp_tls_cfg_t *cfg)
-{
-    if (is_valid_user_d_addr((void *)cfg)) {
-        return esp_tls_conn_http_new(url, cfg);
-    }
-    return NULL;
-}
-
-static ssize_t sys_esp_tls_conn_write(esp_tls_t *tls, const void *data, size_t datalen)
-{
-    if (is_valid_kernel_d_addr((void *)tls) && is_valid_user_d_addr((void *)data)) {
-        ssize_t len = esp_tls_conn_write(tls, data, datalen);
-        return len;
-    }
-    return -1;
-}
-
-static ssize_t sys_esp_tls_conn_read(esp_tls_t *tls, void  *data, size_t datalen)
-{
-    if (is_valid_kernel_d_addr(tls) && is_valid_user_d_addr(data)) {
-        return esp_tls_conn_read(tls, data, datalen);
-    }
-    return -1;
-}
-
-static void sys_esp_tls_conn_delete(esp_tls_t *tls)
-{
-    if (is_valid_kernel_d_addr(tls)) {
-        esp_tls_conn_delete(tls);
-    }
-    return;
 }
 
 static void *sys_malloc(size_t size)
