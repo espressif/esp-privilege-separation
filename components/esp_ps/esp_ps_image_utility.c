@@ -63,7 +63,13 @@ static IRAM_ATTR void kernel_cache_restore(uint32_t cache_state)
     Cache_Resume_ICache(cache_state >> 16);
 }
 
-static IRAM_ATTR void user_load_app(const esp_image_metadata_t* data)
+/*
+ * user_load_app function is converted into inline with -Os
+ * optimization flag. Inline function discards IRAM_ATTR attribute,
+ * resulting in a crash. NOINLINE_ATTR ensures that the function is
+ * not converted into inline.
+ */
+static IRAM_ATTR NOINLINE_ATTR void user_load_app(const esp_image_metadata_t* data)
 {
     uint32_t drom_addr = 0;
     uint32_t drom_load_addr = 0;
