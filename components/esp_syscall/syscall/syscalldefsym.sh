@@ -1,8 +1,9 @@
 #!/bin/sh
 
-in="$1"
+syscall_tbl="$1"
+override_tbl="$2"
 
-defsym_list=$(grep -E "^[0-9A-Fa-fXx]+[[:space:]]" "$in" | sort -n | (
+syscall_defsym_list=$(grep -E "^[0-9A-Fa-fXx]+[[:space:]]" "$syscall_tbl" | sort -n | (
 	while read nr abi name entry ; do
         if [ "$abi" = "common" ];
         then
@@ -12,4 +13,14 @@ defsym_list=$(grep -E "^[0-9A-Fa-fXx]+[[:space:]]" "$in" | sort -n | (
     printf "%s" "${list}"
     ))
 
-printf "%s" "${defsym_list}"
+override_defsym_list=$(grep -E "^[0-9A-Fa-fXx]+[[:space:]]" "$override_tbl" | sort -n | (
+	while read nr abi name entry ; do
+        if [ "$abi" = "common" ];
+        then
+            list="${list}-Wl,--wrap=${name} -Wl,--defsym=__wrap_${name}=${entry} "
+        fi
+	done
+    printf "%s" "${list}"
+    ))
+
+printf "%s" "${syscall_defsym_list}" "${override_defsym_list}"

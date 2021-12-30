@@ -32,7 +32,7 @@ add_custom_target(protected_app DEPENDS ${build_dir}/${PROJECT_NAME}.elf)
 idf_component_get_property(esp_syscall_dir esp_syscall COMPONENT_DIR)
 
 set(syscalldefsym_sh
-    ${esp_syscall_dir}/syscall/syscalldefsym.sh ${esp_syscall_dir}/syscall/syscall.tbl
+    ${esp_syscall_dir}/syscall/syscalldefsym.sh ${esp_syscall_dir}/syscall/syscall.tbl ${esp_syscall_dir}/syscall/override.tbl
     )
 
 execute_process(

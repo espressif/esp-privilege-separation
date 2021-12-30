@@ -15,6 +15,15 @@ emit() {
 	printf "__SYSCALL(%s, %s, )\n" "${_nr}" "${_entry}"
 }
 
+dup=$(grep -wo "^[0-9]\+" "$in" | sort | uniq -d)
+if [ $dup ]
+then
+    echo "********************************************************"
+    echo "   ERROR: Found duplicate syscall numbers, exiting..."
+    echo "********************************************************"
+    exit 1
+fi
+
 grep -E "^[0-9A-Fa-fXx]+[[:space:]]" "$in" | sort -n | (
 	total=0
 
