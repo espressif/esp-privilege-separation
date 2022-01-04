@@ -1214,6 +1214,26 @@ static void sys_esp_tls_conn_delete(esp_tls_t *tls)
     return;
 }
 
+static void *sys_malloc(size_t size)
+{
+    return heap_caps_malloc(size, MALLOC_CAP_WORLD1);
+}
+
+static void *sys_calloc(size_t nmemb, size_t size)
+{
+    return heap_caps_calloc(nmemb, size, MALLOC_CAP_WORLD1);
+}
+
+static void sys_free(void *ptr)
+{
+    free(ptr);
+}
+
+static void *sys_realloc(void* ptr, size_t size)
+{
+    return heap_caps_realloc(ptr, size, MALLOC_CAP_WORLD1);
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif

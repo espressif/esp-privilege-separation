@@ -154,3 +154,9 @@
 1040  custom  esp_tls_conn_write                      sys_esp_tls_conn_write
 1041  custom  esp_tls_conn_read                       sys_esp_tls_conn_read
 1042  common  esp_tls_conn_delete                     sys_esp_tls_conn_delete
+
+# Memory allocation
+1043  common  malloc                                  sys_malloc
+1044  common  calloc                                  sys_calloc
+1045  common  free                                    sys_free
+1046  common  realloc                                 sys_realloc

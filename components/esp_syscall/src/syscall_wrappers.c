@@ -853,6 +853,41 @@ void usr_esp_tls_conn_delete(esp_tls_t *tls)
     EXECUTE_SYSCALL(tls, __NR_esp_tls_conn_delete);
 }
 
+void *usr_malloc(size_t size)
+{
+    return EXECUTE_SYSCALL(size, __NR_malloc);
+}
+
+void *usr_calloc(size_t nmemb, size_t size)
+{
+    return EXECUTE_SYSCALL(nmemb, size, __NR_calloc);
+}
+
+void usr_free(void *ptr)
+{
+    EXECUTE_SYSCALL(ptr, __NR_free);
+}
+
+void *usr_realloc(void* ptr, size_t size)
+{
+    return EXECUTE_SYSCALL(ptr, size, __NR_realloc);
+}
+
+void *usr_heap_caps_malloc( size_t size, uint32_t caps )
+{
+    return usr_malloc(size);
+}
+
+void *usr_heap_caps_calloc( size_t n, size_t size, uint32_t caps)
+{
+    return usr_calloc(n, size);
+}
+
+void usr_heap_caps_free(void *ptr)
+{
+    usr_free(ptr);
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
