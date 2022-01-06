@@ -181,6 +181,53 @@ static IRAM_ATTR void esp_ps_flash_cache_config()
     permc_ll_flash_icache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
 }
 
+static void esp_ps_revoke_world1_peripheral_permissions(void)
+{
+    esp_ps_set_periph_perm(PS_UART1, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_I2C, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_MISC, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_WDG, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_IO_MUX, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_RTC, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_TIMER, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_FE, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_FE2, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_GPIO, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_G0SPI_0, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_G0SPI_1, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_UART, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_SYSTIMER, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_TIMERGROUP1, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_TIMERGROUP, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_BB, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_LEDC, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_RMT, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_UHCI0, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_I2C_EXT0, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_BT, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_PWR, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_WIFIMAC, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_RWBT, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_I2S1, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_CAN, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_APB_CTRL, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_SPI_2, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_WORLD_CONTROLLER, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_DIO, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_AD, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_CACHE_CONFIG, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_DMA_COPY, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_INTERRUPT, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_SENSITIVE, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_SYSTEM, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_USB_DEVICE, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_BT_PWR, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_APB_ADC, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_CRYPTO_DMA, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_CRYPTO_PERI, PS_WORLD_1, PS_PERM_NONE);
+    esp_ps_set_periph_perm(PS_USB_WRAP, PS_WORLD_1, PS_PERM_NONE);
+}
+
 esp_err_t esp_ps_init(esp_ps_intr_handler_t fn)
 {
     if (esp_memprot_is_locked_any()) {
@@ -206,6 +253,8 @@ esp_err_t esp_ps_init(esp_ps_intr_handler_t fn)
     esp_ps_dram_config();
 
     esp_ps_flash_cache_config();
+
+    esp_ps_revoke_world1_peripheral_permissions();
 
     return ESP_OK;
 }
