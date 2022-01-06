@@ -40,11 +40,4 @@ include_directories(${PROTECTED_CONFIG_DIR})
 # sdkconfig is derived from the protected_app
 idf_build_set_property(__OUTPUT_SDKCONFIG 0)
 
-# Compiler might optimize printf calls to puts which will generate linker errors
-# Disable printf optimization
-idf_build_set_property(COMPILE_OPTIONS "-nostdlib" APPEND)
-idf_build_set_property(COMPILE_OPTIONS "-fno-builtin" APPEND)
-idf_build_set_property(COMPILE_OPTIONS "-fno-inline" APPEND)
-idf_build_set_property(COMPILE_OPTIONS "-Wno-format" APPEND)
-
 project(user_app)

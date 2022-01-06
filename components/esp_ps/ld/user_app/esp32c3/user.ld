@@ -48,8 +48,6 @@ SECTIONS
     *( .sdata.*)
     *( .sdata2.*)
     *( .data  .data.*  .udram  .udram.*)
-    *( .sdata.*)
-    *( .sdata2.*)
     _user_data_end = ABSOLUTE(.);
   } > dram_seg
 

@@ -1,17 +1,7 @@
 #include "sdkconfig.h"
 
-MEMORY
-{
-  world1_iram0_seg(RX):              org = 0x40390000, len = 0x10000
-
-  world1_dram0_seg(RX):              org = 0x3FCC0000, len = 0x20000
-}
-
 SECTIONS
 {
-    ASSERT((_iram_bss_end <= ORIGIN(world1_iram0_seg)),
-          "Protected IRAM segment contents does not fit.")
-
     .reserve_w1_iram (NOLOAD) :
     {
         /* W1 IRAM should be placed after W0 IRAM, _iram_bss_end is the end of the W0 IRAM region
