@@ -42,7 +42,8 @@ if (USER_APP_BUILD)
 
 else()
 
-    target_linker_script(${COMPONENT_LIB} INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/reserve_out.ld")
+    idf_component_get_property(esp32c3_lib esp32c3 COMPONENT_LIB)
+    target_linker_script(${esp32c3_lib} INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/reserve_out.ld")
 
     set(LD_DIR ${COMPONENT_DIR}/ld/protected_app/${IDF_TARGET})
 
