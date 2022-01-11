@@ -8,6 +8,10 @@
 5   common  esp_rom_md5_init                        sys_esp_rom_md5_init
 6   common  esp_rom_md5_update                      sys_esp_rom_md5_update
 7   common  esp_rom_md5_final                       sys_esp_rom_md5_final
+8   common  _lock_acquire                           sys__lock_acquire
+9   common  _lock_release                           sys__lock_release
+10  common  esp_time_impl_set_boot_time             sys_esp_time_impl_set_boot_time
+11  common  esp_time_impl_get_boot_time             sys_esp_time_impl_get_boot_time
 
 # FreeRTOS
 256  common  xTaskCreatePinnedToCore                 sys_xTaskCreate
@@ -158,3 +162,6 @@
 1040  common  calloc                                  sys_calloc
 1041  common  free                                    sys_free
 1042  common  realloc                                 sys_realloc
+
+1043  common  esp_random                              sys_esp_random
+1044  common  esp_fill_random                         sys_esp_fill_random

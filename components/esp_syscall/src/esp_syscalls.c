@@ -55,6 +55,9 @@ static DRAM_ATTR QueueHandle_t usr_gpio_isr_queue;
 static DRAM_ATTR QueueHandle_t usr_event_loop_queue;
 static DRAM_ATTR QueueHandle_t usr_xtimer_handler_queue;
 
+void esp_time_impl_set_boot_time(uint64_t time_us);
+uint64_t esp_time_impl_get_boot_time(void);
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -120,6 +123,32 @@ static void sys_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
         return;
     }
     esp_rom_md5_final(digest, context);
+}
+
+IRAM_ATTR static void sys__lock_acquire(_lock_t *lock)
+{
+    if (!is_valid_user_d_addr(lock)) {
+        return;
+    }
+    _lock_acquire(lock);
+}
+
+IRAM_ATTR static void sys__lock_release(_lock_t *lock)
+{
+    if (!is_valid_user_d_addr(lock)) {
+        return;
+    }
+    _lock_release(lock);
+}
+
+static void sys_esp_time_impl_set_boot_time(uint64_t time_us)
+{
+    esp_time_impl_set_boot_time(time_us);
+}
+
+static uint64_t sys_esp_time_impl_get_boot_time(void)
+{
+    return esp_time_impl_get_boot_time();
 }
 
 static int is_valid_user_task(TaskHandle_t xTask)
@@ -1230,6 +1259,19 @@ static void *sys_calloc(size_t nmemb, size_t size)
 static void sys_free(void *ptr)
 {
     free(ptr);
+}
+
+IRAM_ATTR static uint32_t sys_esp_random(void)
+{
+    return esp_random();
+}
+
+static void sys_esp_fill_random(void *buf, size_t len)
+{
+    if (!is_valid_user_d_addr(buf)) {
+        return;
+    }
+    esp_fill_random(buf, len);
 }
 
 static void *sys_realloc(void* ptr, size_t size)

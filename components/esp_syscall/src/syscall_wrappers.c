@@ -114,6 +114,26 @@ void usr_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
     EXECUTE_SYSCALL(digest, context, __NR_esp_rom_md5_final);
 }
 
+UIRAM_ATTR void usr__lock_acquire(_lock_t *lock)
+{
+    EXECUTE_SYSCALL(lock, __NR__lock_acquire);
+}
+
+UIRAM_ATTR void usr__lock_release(_lock_t *lock)
+{
+    EXECUTE_SYSCALL(lock, __NR__lock_release);
+}
+
+void usr_esp_time_impl_set_boot_time(uint64_t time_us)
+{
+    EXECUTE_SYSCALL(time_us, __NR_esp_time_impl_set_boot_time);
+}
+
+uint64_t usr_esp_time_impl_get_boot_time(void)
+{
+    return EXECUTE_SYSCALL(__NR_esp_time_impl_get_boot_time);
+}
+
 // Task Creation
 TaskHandle_t usr_xTaskCreatePinnedToCore(TaskFunction_t pvTaskCode,
                                    const char * const pcName,
@@ -903,6 +923,16 @@ void *usr_heap_caps_calloc( size_t n, size_t size, uint32_t caps)
 void usr_heap_caps_free(void *ptr)
 {
     usr_free(ptr);
+}
+
+UIRAM_ATTR uint32_t usr_esp_random(void)
+{
+    return EXECUTE_SYSCALL(__NR_esp_random);
+}
+
+void usr_esp_fill_random(void *buf, size_t len)
+{
+    EXECUTE_SYSCALL(buf, len, __NR_esp_fill_random);
 }
 
 #ifdef __GNUC__
