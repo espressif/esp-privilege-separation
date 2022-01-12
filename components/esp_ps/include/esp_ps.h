@@ -20,8 +20,6 @@
 #include <esp_partition.h>
 #include "esp_log.h"
 
-#define PS_INTR_ATTR IRAM_ATTR __attribute__((noinline))
-
 typedef void (*esp_ps_intr_handler_t)(void *arg);
 
 typedef enum {
@@ -116,6 +114,12 @@ esp_err_t esp_ps_init(esp_ps_intr_handler_t fn);
  *      - ESP_FAIL otherwise
  */
 esp_err_t esp_ps_user_boot();
+
+/**
+ * @brief Reboots user app.
+ *        Deletes all the user tasks and then calls esp_ps_user_boot
+ */
+void esp_ps_user_reboot();
 
 /**
  * @brief Set entry to user space. When the entry address is fetched, CPU switches to user space

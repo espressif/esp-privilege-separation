@@ -20,8 +20,31 @@
 #include "soc/rtc.h"
 #include "soc/soc.h"
 #include "esp_rom_uart.h"
+#include "esp_ps.h"
+#include "esp_private/system_internal.h"
 
-#define INTR_FRAME_SIZE             128
+#define INTR_FRAME_SIZE             160      // This value should be same as CONTEXT_SIZE defined in vectors.S
+
+static __attribute__((unused)) const char *TAG = "esp_ps_panic";
+
+static const char *reason[] = {
+    "Instruction address misaligned",
+    "Instruction access fault",
+    "Illegal instruction",
+    "Breakpoint",
+    "Load address misaligned",
+    "Load access fault",
+    "Store address misaligned",
+    "Store access fault",
+    "Environment call from U-mode",
+    "Environment call from S-mode",
+    NULL,
+    "Environment call from M-mode",
+    "Instruction page fault",
+    "Load page fault",
+    NULL,
+    "Store page fault",
+};
 
 #ifdef CONFIG_PS_REBOOT_ENTIRE_SYSTEM
 // Digital reset ensures that the entire digital sub-system (including peripherals, WiFi, Timers, etc) is reset
@@ -68,30 +91,9 @@ static void panic_print_registers(const void *f, int core)
         }
     }
 }
-#endif
 
-/* Printing debug information on console consumes substantial amount of time which triggers the
- * interrupt watchdog timer. Increase interrupt wdt timeout from menuconfig
- *
- * Later on, temporarily disable the interrupt watchdog while handling crashed task
- */
-void  esp_ps_handle_crashed_task()
+static void print_stack_dump(void *frame)
 {
-    StaticTask_t *curr_handle = xTaskGetCurrentTaskHandle();
-    ets_printf("Troubling task: %s\n", pcTaskGetName(NULL));
-
-#ifdef CONFIG_PS_BACKTRACE_INFO
-    /* Interrupt vector stores the exception stack frame
-     * at the top of the task TCB
-     * Get that exception stack frame from the TCB to print
-     * backtrace
-     */
-    uint32_t *frame = curr_handle->pxDummy1;
-
-    ((RvExcFrame *)frame)->sp = (uint32_t)(frame) + INTR_FRAME_SIZE;
-
-    panic_print_registers(frame, 0);
-
     ets_printf("\r\n\r\nStack memory:\r\n");
     uint32_t sp = (uint32_t)((RvExcFrame *)frame)->sp;
     const int per_line = 8;
@@ -102,16 +104,63 @@ void  esp_ps_handle_crashed_task()
             ets_printf("0x%08x%s", spp[y], y == per_line - 1 ? "\r\n" : " ");
         }
     }
+}
+#endif
+
+/* Printing debug information on console consumes substantial amount of time which triggers the
+ * interrupt watchdog timer. Increase interrupt wdt timeout from menuconfig
+ *
+ * Later on, temporarily disable the interrupt watchdog while handling crashed task
+ */
+IRAM_ATTR void esp_ps_handle_crashed_task(void)
+{
+    StaticTask_t *curr_handle = xTaskGetCurrentTaskHandle();
+    /* Interrupt vector stores the exception stack frame
+     * at the top of the task TCB
+     * Get that exception stack frame from the TCB to print
+     * backtrace
+     */
+    uint32_t *frame = curr_handle->pxDummy1;
+
+    ((RvExcFrame *)frame)->sp = (uint32_t)(frame) + INTR_FRAME_SIZE;
+
+    uint32_t mcause = ((RvExcFrame *)frame)->mcause;
+
+    esp_ps_int_t intr = esp_ps_get_int_status();
+    ets_printf("\n=================================================\n");
+    ets_printf("User app exception occurred:\n");
+    if (intr != 0) {
+        ets_printf("Guru Meditation Error: Illegal %s access: Fault addr: 0x%x\n", esp_ps_int_type_to_str(intr), esp_ps_get_fault_addr(intr));
+        esp_ps_clear_and_reenable_int(intr);
+    } else {
+        ets_printf("Guru Meditation Error: %s\n", reason[mcause]);
+    }
+    ets_printf("Troubling task: %s\n", pcTaskGetName(NULL));
+    ets_printf("=================================================\n");
+
+#ifdef CONFIG_PS_BACKTRACE_INFO
+    panic_print_registers(frame, 0);
+    print_stack_dump(frame);
 
     char sha256_buf[65];
     esp_ota_get_app_elf_sha256(sha256_buf, sizeof(sha256_buf));
     ets_printf("\r\n\r\n\r\nELF file SHA256: %s\r\n\r\n", sha256_buf);
+    ets_printf("=================================================\n");
 #endif
 
 #ifdef CONFIG_PS_DELETE_VIOLATING_TASK
+    ets_printf("Deleting %s...\n", pcTaskGetName(curr_handle));
     vTaskDelete(curr_handle);
+    ets_printf("=================================================\n");
+    portYIELD_FROM_ISR();
+#elif CONFIG_PS_RESTART_USER_APP
+    esp_ps_user_reboot();
+    ets_printf("Restarting user_app...\n");
+    ets_printf("=================================================\n");
     portYIELD_FROM_ISR();
 #elif CONFIG_PS_REBOOT_ENTIRE_SYSTEM
+    ets_printf("Rebooting...\n");
+    ets_printf("=================================================\n");
     esp_restart_noos_dig();
 #endif
 }

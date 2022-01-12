@@ -40,6 +40,8 @@
 #define TAG             "esp_ps"
 #define RV_INT_NUM      2
 
+#define PS_INTR_ATTR IRAM_ATTR __attribute__((noinline))
+
 extern intptr_t _vector_table;
 
 extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
@@ -79,7 +81,7 @@ static void esp_ps_pif_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_pif_get_int_source_num(), int_num);
 }
 
-static IRAM_ATTR void esp_ps_violation_intr_func(void *args)
+static PS_INTR_ATTR void esp_ps_violation_intr_func(void *args)
 {
     if (esp_ptr_executable(intr_func)) {
         intr_func(args);
@@ -248,11 +250,6 @@ esp_err_t esp_ps_init(esp_ps_intr_handler_t fn)
         return ESP_FAIL;
     }
 
-    if (!esp_ptr_executable(fn)) {
-        ESP_LOGE(TAG, "Invalid interrupt handler");
-        return ESP_FAIL;
-    }
-
     esp_ps_int_init(fn);
 
     permc_ll_sram_set_split_line((intptr_t)&_iram_end);
@@ -368,6 +365,56 @@ IRAM_ATTR esp_err_t esp_ps_user_boot()
         }
     }
      return ret;
+}
+
+static void cleanup_user_tasks()
+{
+    ets_printf("Cleaning up user tasks\n");
+    TaskHandle_t handle = NULL;
+    TaskSnapshot_t *snapshots = NULL;
+    uint32_t task_count = uxTaskGetNumberOfTasks();
+    snapshots = calloc(task_count, sizeof(TaskSnapshot_t));
+    if (!snapshots) {
+        ets_printf("Not enough memory to store task snapshots\n");
+        return;
+    }
+    unsigned int tcb_size;
+    uint32_t count = uxTaskGetSnapshotAll(snapshots, task_count, &tcb_size);
+    for (int i = 0; i < count; i++) {
+        handle = (TaskHandle_t)snapshots[i].pxTCB;
+        if (pvTaskGetThreadLocalStoragePointer(handle, 1) == NULL) {
+            // This indicates that its a protected space task.
+            // Keep it as it is
+            continue;
+        }
+        ets_printf("Deleting user task: %s\n", pcTaskGetTaskName(handle));
+        vTaskDelete(handle);
+    }
+    free(snapshots);
+}
+
+static void oneshot_timer_callback(void* arg)
+{
+    esp_ps_user_boot();
+}
+
+static void reboot_user_app()
+{
+    const esp_timer_create_args_t oneshot_timer_args = {
+        .callback = &oneshot_timer_callback,
+        .arg = (void*) NULL,
+        .name = "restart_user_app"
+    };
+    esp_timer_handle_t oneshot_timer;
+    esp_timer_create(&oneshot_timer_args, &oneshot_timer);
+
+    esp_timer_start_once(oneshot_timer, 1*1000*1000);
+}
+
+IRAM_ATTR void esp_ps_user_reboot()
+{
+    cleanup_user_tasks();
+    reboot_user_app();
 }
 
 IRAM_ATTR char *esp_ps_int_type_to_str(esp_ps_int_t int_type)

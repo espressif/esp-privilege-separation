@@ -17,4 +17,4 @@
 
 esp_err_t esp_ps_user_unpack(esp_image_metadata_t *user_img_data);
 
-void esp_ps_handle_crashed_task();
+void esp_ps_handle_crashed_task(void);

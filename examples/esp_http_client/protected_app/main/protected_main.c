@@ -29,18 +29,17 @@
 
 static const char *TAG = "protected_app";
 
-PS_INTR_ATTR void world_monitor_isr(void *arg)
+IRAM_ATTR void user_app_exception_handler(void *arg)
 {
-    esp_ps_int_t intr = esp_ps_get_int_status();
-    ets_printf("Illegal %s access: Fault addr: 0x%x\n", esp_ps_int_type_to_str(intr), esp_ps_get_fault_addr(intr));
-    esp_ps_clear_and_reenable_int(intr);
+    // Perform actions when user app exception happens
 }
+
 
 IRAM_ATTR void app_main()
 {
     esp_err_t ret;
 
-    ret = esp_ps_init(world_monitor_isr);
+    ret = esp_ps_init(user_app_exception_handler);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize PS %d\n", ret);
     }
