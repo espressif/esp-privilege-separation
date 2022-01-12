@@ -1,11 +1,11 @@
-From a5de84a6ee28f2c51a1ef815c0c28ae7a9e0e46d Mon Sep 17 00:00:00 2001
+From 12ce90fd342a6d84c76f6f9b5f3b2f61c62672e4 Mon Sep 17 00:00:00 2001
 From: Sachin Parekh <sachin.parekh@espressif.com>
-Date: Wed, 20 Oct 2021 12:21:56 +0530
+Date: Wed, 12 Jan 2022 17:58:19 +0530
 Subject: [PATCH] Changes to achieve privilege separation
 
 
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
-index 296427721a..2eb50dc94d 100644
+index 296427721a7..2eb50dc94d9 100644
 --- a/components/esp32c3/Kconfig
 +++ b/components/esp32c3/Kconfig
 @@ -252,4 +252,10 @@ menu "ESP32C3-Specific"
@@ -20,7 +20,7 @@ index 296427721a..2eb50dc94d 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/hal/interrupt_controller_hal.c b/components/hal/interrupt_controller_hal.c
-index f7e815beff..e50c0db74d 100644
+index f7e815beffe..e50c0db74d9 100644
 --- a/components/hal/interrupt_controller_hal.c
 +++ b/components/hal/interrupt_controller_hal.c
 @@ -22,7 +22,7 @@ static bool is_interrupt_number_reserved(int interrupt_number)
@@ -33,7 +33,7 @@ index f7e815beff..e50c0db74d 100644
          return true;
      }
 diff --git a/components/heap/include/esp_heap_caps.h b/components/heap/include/esp_heap_caps.h
-index bed3d710bf..b20441103a 100644
+index bed3d710bf0..b20441103aa 100644
 --- a/components/heap/include/esp_heap_caps.h
 +++ b/components/heap/include/esp_heap_caps.h
 @@ -41,6 +41,8 @@ extern "C" {
@@ -46,10 +46,10 @@ index bed3d710bf..b20441103a 100644
  #define MALLOC_CAP_INVALID          (1<<31) ///< Memory can't be used / list end marker
  
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
-index 2e1c7c477f..57576fcf6d 100644
+index 1006d5bea53..4fd9c47a255 100644
 --- a/components/riscv/vectors.S
 +++ b/components/riscv/vectors.S
-@@ -16,7 +16,12 @@
+@@ -16,9 +16,16 @@
  #include "riscv/rvruntime-frames.h"
  #include "soc/soc_caps.h"
  #include "sdkconfig.h"
@@ -57,151 +57,198 @@ index 2e1c7c477f..57576fcf6d 100644
 +#include "soc/world_controller_reg.h"
 +#include "soc/extmem_reg.h"
  
++#define W1_EXCEPTION_MAGIC  21
 +#define EXCCAUSE_ECALL  11
 +#define WORLD_OFFSET    (0x4c + CONFIG_FREERTOS_MAX_TASK_NAME_LEN + 3)&~3
  
- 	.equ SAVE_REGS, 32
+-	.equ SAVE_REGS, 32
++    /* Save CSRs when servicing interrupts */
++	.equ SAVE_REGS, 40
  	.equ CONTEXT_SIZE, (SAVE_REGS * 4)
-@@ -61,6 +66,35 @@
+ 	.equ panic_from_exception, xt_unhandled_exception
+ 	.equ panic_from_isr, panicHandler
+@@ -61,6 +68,35 @@
  	sw   t0, RV_STK_MEPC(sp)
  .endm
  
 +.macro save_world
-+	mv      t0, zero
-+	csrr    t1, mcause
-+	li      t2, 0x80000000
-+	bleu    t1, t2, _from_exception
++    mv      t0, zero
++    csrr    t1, mcause
++    li      t2, 0x80000000
++    bleu    t1, t2, _from_exception
 +
-+	li      t2, 0x7fffffff
-+	and     t0, t1, t2
++    li      t2, 0x7fffffff
++    and     t0, t1, t2
 +_from_exception:
-+	/* t0 contains the mcause that is also the STATUSTABLE entry */
-+	la      t1, WORLD_CONTROL_CORE_X_STATUSTABLE(0,0)
-+	slli    t0, t0, 2
-+	add     t2, t1, t0
-+	lw      t3, 0x0(t2)
-+	/* Zero out the STATUSTABLE contents and store the WORLD */
-+	sw      zero, 0x0(t2)
-+	andi    t3, t3, 1
++    /* t0 contains the mcause that is also the STATUSTABLE entry */
++    la      t1, WORLD_CONTROL_CORE_X_STATUSTABLE(0,0)
++    slli    t0, t0, 2
++    add     t2, t1, t0
++    lw      t3, 0x0(t2)
++    /* Zero out the STATUSTABLE contents and store the WORLD */
++    sw      zero, 0x0(t2)
++    andi    t3, t3, 1
 +
-+	la      t4, pxCurrentTCB
-+	lw      t5, 0x00(t4)
-+	sw      t3, WORLD_OFFSET(t5)
++    la      t4, pxCurrentTCB
++    lw      t5, 0x00(t4)
++    sw      t3, WORLD_OFFSET(t5)
 +
-+	/* Set WORLD controller MIE to track changes in STATUSTABLE */
-+	la      t0, WORLD_CONTROL_CORE_X_MSTATUS_MIE(0)
-+	li      t1, 1
-+	sw      t1, 0x0(t0)
-+	fence
++    /* Set WORLD controller MIE to track changes in STATUSTABLE */
++    la      t0, WORLD_CONTROL_CORE_X_MSTATUS_MIE(0)
++    li      t1, 1
++    sw      t1, 0x0(t0)
++    fence
 +.endm
 +
  .macro restore_regs
  	lw   ra,  RV_STK_RA(sp)
  	lw   tp,  RV_STK_TP(sp)
-@@ -99,6 +133,29 @@
+@@ -99,6 +135,29 @@
  	csrw	mepc, t0
  .endm
  
 +.macro restore_world
-+	la      t0, pxCurrentTCB
-+	lw      t0, 0x00(t0)
-+	lw      t0, WORLD_OFFSET(t0)
-+	beq     t0, zero, skip_restore_world
++    la      t0, pxCurrentTCB
++    lw      t0, 0x00(t0)
++    lw      t0, WORLD_OFFSET(t0)
++    beq     t0, zero, skip_restore_world
 +
-+	/* Prepare WORLD controller for switch */
-+	li      t1, 2
-+	la      t2, WORLD_CONTROL_CORE_X_WORLD_PREPARE(0)
-+	sw      t1, 0x0(t2)
++    /* Prepare WORLD controller for switch */
++    li      t1, 2
++    la      t2, WORLD_CONTROL_CORE_X_WORLD_PREPARE(0)
++    sw      t1, 0x0(t2)
 +
-+	/* Set TRIGGER_ADDR to the return address; held by MEPC */
-+	lw      t1, RV_STK_MEPC(sp)
-+	la      t2, WORLD_CONTROL_CORE_X_WORLD_TRIGGER_ADDR(0)
-+	sw      t1, 0x0(t2)
++    /* Set TRIGGER_ADDR to the return address; held by MEPC */
++    lw      t1, RV_STK_MEPC(sp)
++    la      t2, WORLD_CONTROL_CORE_X_WORLD_TRIGGER_ADDR(0)
++    sw      t1, 0x0(t2)
 +
-+	li      t1, 1
-+	la      t2, WORLD_CONTROL_CORE_X_WORLD_UPDATE(0)
-+	sw      t1, 0x0(t2)
++    li      t1, 1
++    la      t2, WORLD_CONTROL_CORE_X_WORLD_UPDATE(0)
++    sw      t1, 0x0(t2)
 +skip_restore_world:
-+	fence
++    fence
 +.endm
 +
  	.global rtos_int_enter
  	.global rtos_int_exit
  	.global _global_interrupt_handler
-@@ -141,6 +198,27 @@ _vector_table:
+@@ -141,6 +200,35 @@ _vector_table:
  	/* Exception handler.*/
  	.type _panic_handler, @function
  _panic_handler:
-+	/* Need to check if IRAM violation has occurred, if so delegate it to _interrupt_handler */
-+	csrw    mscratch, t0
-+	la      t0, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_2_REG
-+	lw      t0, 0x00(t0)
-+	andi    t0, t0, 0x1
-+	xori    t0, t0, 0x1
-+	bne     t0, zero, 1f
-+	csrr    t0, mscratch
-+	j       _interrupt_handler
-+1:
-+	/* Need to check if cache violation has occurred, if so delegate it to _interrupt_handler */
-+	la      t0, EXTMEM_CORE0_ACS_CACHE_INT_ST_REG
-+	lw      t0, 0x00(t0)
-+	andi    t0, t0, 0x4
-+	xori    t0, t0, 0x4
-+	bne     t0, zero, 2f
-+	csrr    t0, mscratch
-+	j       _interrupt_handler
-+2:
-+	csrr    t0, mscratch
++
++#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    csrw    mscratch, t0
++
++    /* If exception caused by ecall, skip other W1 checks */
++    csrr    t0, mcause
++    xori    t0, t0, EXCCAUSE_ECALL
++    beq     t0, zero, w0_exception
++
++    /* Check if the exception occurred in W1 environment,
++     * if so, delegate to _interrupt_handler
++     */
++    la      t0, WORLD_CONTROL_CORE_X_STATUSTABLE(0,0)
++    lw      t0, 0x0(t0)
++    andi    t0, t0, 1
++    beq     t0, zero, w0_exception
++    csrr    t0, mscratch
++
++    /* Use mscratch temporarily to notify _interrupt_handler about the W1 exception
++     * Storing a number (21, 0b10101) in mscratch
++     */
++    csrrwi  zero, mscratch, W1_EXCEPTION_MAGIC
++
++    j       _interrupt_handler
++
++w0_exception:
++    csrr    t0, mscratch
++#endif
 +
  	addi sp, sp, -RV_STK_FRMSZ /* allocate space on stack to store necessary registers */
  	/* save general registers */
  	sw ra,  RV_STK_RA(sp)
-@@ -175,6 +253,22 @@ _panic_handler:
+@@ -175,6 +263,22 @@ _panic_handler:
  	sw t6,  RV_STK_T6(sp)
  	addi t0, sp, RV_STK_FRMSZ /* restore sp with the value when trap happened */
  	sw t0,  RV_STK_SP(sp)
 +
-+	/* If exception caused by ECALL, delegate to __ecall_handler and store
-+	 * privileged registers in kernel stack
-+	 */
-+	csrr    t2, mcause
-+	li      t3, EXCCAUSE_ECALL
-+	bne     t2, t3, _skip_ecall
-+
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
-+	.global __ecall_handler
++    /* If exception caused by ECALL, delegate to __ecall_handler and store
++     * privileged registers in kernel stack
++     */
++    csrr    t2, mcause
++    li      t3, EXCCAUSE_ECALL
++    bne     t2, t3, _skip_ecall
 +
-+	// Need to be defined by the application
-+	call    __ecall_handler				// Should not return
-+#endif
++    .global __ecall_handler
++
++    // Need to be defined by the application
++    call    __ecall_handler             // Should not return
 +
 +_skip_ecall:
++#endif
  	csrr t0, mepc
  	sw t0,  RV_STK_MEPC(sp)
  	csrr t0, mstatus
-@@ -222,6 +316,9 @@ _interrupt_handler:
+@@ -222,6 +326,43 @@ _interrupt_handler:
  	/* entry */
  	save_regs
  	save_mepc
-+	#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
-+	save_world
-+	#endif
++#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    save_world
++
++    /* Save CSRs */
++    sw    gp, RV_STK_GP(sp)
++
++    addi  t0, sp, CONTEXT_SIZE /* restore sp with the value when trap happened */
++
++    sw    t0, RV_STK_SP(sp)
++    csrr  t0, mstatus
++    sw    t0, RV_STK_MSTATUS(sp)
++    csrr  t0, mtvec
++    sw    t0, RV_STK_MTVEC(sp)
++    csrr  t0, mcause
++    sw    t0, RV_STK_MCAUSE(sp)
++    csrr  t0, mtval
++    sw    t0, RV_STK_MTVAL(sp)
++    csrr  t0, mhartid
++    sw    t0, RV_STK_MHARTID(sp)
++
++    /* Check if we arrive here because of exception in user space */
++    csrr    t0, mscratch
++    li      t1, W1_EXCEPTION_MAGIC
++    bne     t0, t1, 1f
++
++    /* It is indeed from W1 exception.
++     * Set the mcause to 2 (interrupt reserved for W1 exception)
++     * The actual mcause is already stored on the stack
++     */
++    csrrwi  zero, mcause, 2
++
++    /* Clear mscratch CSR */
++    csrw   mscratch, zero
++
++    fence
++1:
++#endif
  
  	/* Before doing anythig preserve the stack pointer */
  	/* It will be saved in current TCB, if needed */
-@@ -294,6 +391,9 @@ _interrupt_handler:
+@@ -294,6 +435,9 @@ _interrupt_handler:
  	/* restore the rest of the registers */
  	csrw mcause, s1
  	csrw mstatus, s2
-+	#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
-+	restore_world
-+	#endif
++#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    restore_world
++#endif
  	restore_mepc
  	restore_regs
  
 diff --git a/components/soc/esp32c3/include/soc/world_controller_reg.h b/components/soc/esp32c3/include/soc/world_controller_reg.h
 new file mode 100644
-index 0000000000..f4a6fe3724
+index 00000000000..f4a6fe37247
 --- /dev/null
 +++ b/components/soc/esp32c3/include/soc/world_controller_reg.h
 @@ -0,0 +1,50 @@
@@ -256,7 +303,7 @@ index 0000000000..f4a6fe3724
 +#define World_Controller_EDMA_SHA                               (CPU_PERI_WORLD_CONTROLLER + 0x91C)
 +#define World_Controller_EDMA_ADC_DAC                           (CPU_PERI_WORLD_CONTROLLER + 0x920)
 diff --git a/components/soc/esp32c3/soc_memory_layout.c b/components/soc/esp32c3/soc_memory_layout.c
-index ba0ae819cb..bbdc10254f 100644
+index ba0ae819cba..c4c73e9b5bb 100644
 --- a/components/soc/esp32c3/soc_memory_layout.c
 +++ b/components/soc/esp32c3/soc_memory_layout.c
 @@ -44,6 +44,10 @@ const soc_memory_type_desc_t soc_memory_types[] = {
@@ -270,26 +317,8 @@ index ba0ae819cb..bbdc10254f 100644
  };
  
  #ifdef CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
-@@ -61,7 +65,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
-  *       this list should always be sorted from low to high by start address.
-  *
-  */
--const soc_memory_region_t soc_memory_regions[] = {
-+__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
-     { 0x3FC80000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
-     { 0x3FCA0000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
-     { 0x3FCC0000, 0x20000, 1, 0x403C0000}, //Block 9,  can be used as trace memory
-@@ -70,7 +74,7 @@ const soc_memory_region_t soc_memory_regions[] = {
- #endif
- };
- 
--const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
-+__attribute__((weak)) const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
- 
- 
- extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
 diff --git a/tools/idf_monitor.py b/tools/idf_monitor.py
-index 490178e53a..2ca18c7d04 100755
+index 490178e53a3..2ca18c7d04f 100755
 --- a/tools/idf_monitor.py
 +++ b/tools/idf_monitor.py
 @@ -854,6 +854,11 @@ class Monitor(object):
