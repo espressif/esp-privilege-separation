@@ -110,11 +110,26 @@ typedef enum {
 #define DRAM_PMS_S              2
 #define DRAM_PMS_V              3
 
+#define RTC_PMS_W0_BASE         0
+#define RTC_PMS_W1_BASE         6
+#define RTC_PMS_S               3
+#define RTC_PMS_V               7
+
 #define FLASH_ICACHE_V          3
 #define FLASH_DCACHE_V          1
 
 #define PIF_PMS_MAX_REG_ENTRY   16
 #define PIF_PMS_V               3
+
+#define permc_ll_rtc_get_int_source_num       permc_ll_pif_get_int_source_num
+#define permc_ll_rtc_enable_int               permc_ll_pif_enable_int
+#define permc_ll_rtc_clear_int                permc_ll_pif_clear_int
+#define permc_ll_rtc_disable_int              permc_ll_pif_disable_int
+#define permc_ll_rtc_get_int_status           permc_ll_pif_get_int_status
+#define permc_ll_rtc_get_fault_wr             permc_ll_pif_get_fault_wr
+#define permc_ll_rtc_get_fault_loadstore      permc_ll_pif_get_fault_loadstore
+#define permc_ll_rtc_get_fault_world          permc_ll_pif_get_fault_world
+#define permc_ll_rtc_get_fault_addr           permc_ll_pif_get_fault_addr
 
 static inline void permc_ll_sram_set_split_line(intptr_t addr)
 {
@@ -337,6 +352,69 @@ static inline uint32_t permc_ll_dram_get_fault_addr()
 }
 
 /*
+ * RTC Memory
+ * - RTC memory has single split line for each WORLD
+ * - Only AREA0 and AREA1 are possible, AREA0 -> LOW; AREA1 -> HIGH
+ */
+static inline void permc_ll_rtc_set_split_line(permc_world_t world, intptr_t addr)
+{
+    switch (world) {
+        case PERMC_WORLD_0:
+            REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_9_REG, SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_SPLTADDR_WORLD_0, (addr >> 2));
+            break;
+        case PERMC_WORLD_1:
+            REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_9_REG, SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_SPLTADDR_WORLD_1, (addr >> 2));
+            break;
+        default:
+            assert(0);
+    }
+}
+
+static inline void permc_ll_rtc_set_perm(permc_sram_area_t area, permc_world_t world, permc_flags_t flags)
+{
+    assert(world <= PERMC_WORLD_1);
+
+    /* Since there is a single split line, only 2 areas are possible */
+    assert(area < PERMC_AREA_2);
+
+    uint32_t reg = SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_10_REG;
+    uint32_t offset;
+    uint32_t perm = 0;
+
+    /* For RTC, the order for R and W permission is reversed
+     * 1: Write
+     * 2: Read
+     * 4: Execute
+     */
+    if (flags & PERMC_ACCESS_R) {
+        perm = perm | 2;
+    }
+
+    if (flags & PERMC_ACCESS_W) {
+        perm = perm | 1;
+
+    }
+
+    if (flags & PERMC_ACCESS_X) {
+        perm = perm | 4;
+    }
+
+    if (world == PERMC_WORLD_0) {
+        offset = RTC_PMS_W0_BASE;
+    } else {
+        offset = RTC_PMS_W1_BASE;
+    }
+
+    uint32_t shift = offset + (area * RTC_PMS_S);
+
+    uint32_t mask = ~(RTC_PMS_V << shift);
+
+    uint32_t val = flags & RTC_PMS_V;
+
+    REG_WRITE(reg, (REG_READ(reg) & mask) | (val << shift));
+}
+
+/*
  *  Flash Icache
  */
 static inline void permc_ll_flash_icache_set_split_line(permc_split_line_t line, intptr_t addr)
@@ -542,6 +620,16 @@ static inline void permc_ll_pif_disable_int()
 static inline uint32_t permc_ll_pif_get_int_status()
 {
     return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_INTR);
+}
+
+static inline uint32_t permc_ll_pif_get_fault_wr()
+{
+    return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HWRITE);
+}
+
+static inline uint32_t permc_ll_pif_get_fault_loadstore()
+{
+    return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HPORT_0);
 }
 
 static inline uint32_t permc_ll_pif_get_fault_world()

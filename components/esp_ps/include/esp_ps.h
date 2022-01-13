@@ -27,6 +27,7 @@ typedef void (*esp_ps_intr_handler_t)(void *arg);
 typedef enum {
     PS_IRAM_INT = 1,
     PS_DRAM_INT,
+    PS_RTC_INT,
     PS_FLASH_ICACHE_INT,
     PS_PERIPH_INT,
 } esp_ps_int_t;

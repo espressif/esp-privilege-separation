@@ -119,6 +119,7 @@ if __name__ == '__main__':
     expected_output = [
             'Illegal IRAM access:',
             'Illegal DRAM access:',
+            'Illegal RTC access:',
             'Illegal Peripheral access:',
             'Illegal Flash Icache access:'
             ]

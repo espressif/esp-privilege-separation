@@ -164,6 +164,19 @@ static void esp_ps_dram_config()
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+static void esp_ps_rtc_config()
+{
+    permc_ll_rtc_set_split_line(PERMC_WORLD_0, SOC_RTC_IRAM_LOW);
+    permc_ll_rtc_set_split_line(PERMC_WORLD_1, SOC_RTC_IRAM_LOW);
+
+    permc_ll_rtc_set_perm(PERMC_AREA_0, PERMC_WORLD_0, PERMC_ACCESS_ALL);
+    permc_ll_rtc_set_perm(PERMC_AREA_1, PERMC_WORLD_0, PERMC_ACCESS_ALL);
+
+    // No RTC access to WORLD1
+    permc_ll_rtc_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+    permc_ll_rtc_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+}
+
 static IRAM_ATTR void esp_ps_flash_cache_config()
 {
     /* Invalidate Cache */
@@ -251,6 +264,8 @@ esp_err_t esp_ps_init(esp_ps_intr_handler_t fn)
     esp_ps_iram_config();
 
     esp_ps_dram_config();
+
+    esp_ps_rtc_config();
 
     esp_ps_flash_cache_config();
 
@@ -364,6 +379,8 @@ IRAM_ATTR char *esp_ps_int_type_to_str(esp_ps_int_t int_type)
             return "DRAM";
         case PS_FLASH_ICACHE_INT:
             return "Flash Icache";
+        case PS_RTC_INT:
+            return "RTC";
         case PS_PERIPH_INT:
             return "Peripheral";
         default:
@@ -383,6 +400,7 @@ IRAM_ATTR void esp_ps_enable_int(esp_ps_int_t int_type)
         case PS_FLASH_ICACHE_INT:
             permc_ll_flash_icache_enable_int();
             break;
+        case PS_RTC_INT:
         case PS_PERIPH_INT:
             permc_ll_pif_enable_int();
             break;
@@ -407,6 +425,7 @@ IRAM_ATTR void esp_ps_clear_and_reenable_int(esp_ps_int_t int_type)
             permc_ll_flash_icache_clear_int();
             permc_ll_flash_icache_enable_int();
             break;
+        case PS_RTC_INT:
         case PS_PERIPH_INT:
             permc_ll_pif_clear_int();
             permc_ll_pif_enable_int();
@@ -428,7 +447,12 @@ IRAM_ATTR esp_ps_int_t esp_ps_get_int_status()
     } else if (permc_ll_flash_icache_get_int_status()) {
         int_status = PS_FLASH_ICACHE_INT;
     } else if (permc_ll_pif_get_int_status()) {
-        int_status = PS_PERIPH_INT;
+        uint32_t addr = permc_ll_pif_get_fault_addr();
+        if (addr >= SOC_RTC_IRAM_LOW && addr < SOC_RTC_IRAM_HIGH) {
+            int_status = PS_RTC_INT;
+        } else {
+            int_status = PS_PERIPH_INT;
+        }
     }
 
     return int_status;
@@ -443,6 +467,7 @@ IRAM_ATTR uint32_t esp_ps_get_fault_addr(esp_ps_int_t int_type)
             return permc_ll_dram_get_fault_addr();
         case PS_FLASH_ICACHE_INT:
             return permc_ll_flash_icache_get_fault_addr();
+        case PS_RTC_INT:
         case PS_PERIPH_INT:
             return permc_ll_pif_get_fault_addr();
         default:

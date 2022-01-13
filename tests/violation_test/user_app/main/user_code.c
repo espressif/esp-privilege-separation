@@ -53,6 +53,15 @@ void dram_violation_task()
     }
 }
 
+void rtc_violation_task()
+{
+    *(uint32_t *)(SOC_RTC_IRAM_LOW + 0x1000) = 0x41414141;
+
+    while(1) {
+        ;
+    }
+}
+
 void pif_violation_task()
 {
     gpio_ll_set_level(&GPIO, BLINK_GPIO, 1);
@@ -84,6 +93,10 @@ void user_main()
     }
 
     if (xTaskCreate(dram_violation_task, "dram_task", 2048, NULL, 5, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(rtc_violation_task, "rtc_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
 
