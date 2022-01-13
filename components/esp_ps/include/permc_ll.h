@@ -102,10 +102,12 @@ typedef enum {
 
 #define IRAM_PMS_W0_BASE       0
 #define IRAM_PMS_W1_BASE       0
+#define IRAM_PMS_S             3
 #define IRAM_PMS_V             7
 
 #define DRAM_PMS_W0_BASE        0
 #define DRAM_PMS_W1_BASE       12
+#define DRAM_PMS_S              2
 #define DRAM_PMS_V              3
 
 #define FLASH_ICACHE_V          3
@@ -182,7 +184,7 @@ static inline void permc_ll_iram_set_perm(permc_sram_area_t area, permc_world_t 
         offset = IRAM_PMS_W1_BASE;
     }
 
-    uint32_t shift = offset + (area * IRAM_PMS_V);
+    uint32_t shift = offset + (area * IRAM_PMS_S);
 
     uint32_t mask = ~(IRAM_PMS_V << shift);
 
@@ -284,7 +286,7 @@ static inline void permc_ll_dram_set_perm(permc_sram_area_t area, permc_world_t 
         offset = DRAM_PMS_W1_BASE;
     }
 
-    uint32_t shift = offset + (area * DRAM_PMS_V);
+    uint32_t shift = offset + (area * DRAM_PMS_S);
 
     uint32_t mask = ~(DRAM_PMS_V << shift);
 
