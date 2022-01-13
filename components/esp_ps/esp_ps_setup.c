@@ -295,7 +295,7 @@ IRAM_ATTR esp_err_t esp_ps_user_spawn_task(void *user_entry, uint32_t stack_sz)
      * We need to first set the kernel stack as a TLS and only then it should be executed
      */
     vTaskSuspendAll();
-    handle = xTaskCreateStatic(user_entry, "User main task", KERNEL_STACK_SIZE, NULL, 0, xtaskStack, xtaskTCB);
+    handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 0, xtaskStack, xtaskTCB);
 
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, 1, kernel_stack, NULL);
 
