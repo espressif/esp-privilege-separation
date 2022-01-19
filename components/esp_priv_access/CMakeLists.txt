@@ -4,11 +4,16 @@ else()
     set(srcs "esp_priv_access_image_utility.c"
              "esp_priv_access_setup.c"
              "esp_priv_access_panic.c")
+    if(CONFIG_PA_CONSOLE_ENABLE)
+        list(APPEND srcs "esp_priv_access_console.c"
+                         "esp_priv_access_commands.c")
+    endif()
 endif()
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS "include"
-                    REQUIRES bootloader_support spi_flash app_update)
+                    PRIV_INCLUDE_DIRS "."
+                    REQUIRES bootloader_support spi_flash app_update console)
 
 if (USER_APP_BUILD)
 

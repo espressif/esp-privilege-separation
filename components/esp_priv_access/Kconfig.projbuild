@@ -81,4 +81,10 @@ menu "Privilege separation"
             If enabled, registers and stack dump of the violating user task will be printed on the console
             This information can be further used by host utility (e.g idf_monitor) to generate a backtrace
 
+    config PA_CONSOLE_ENABLE
+        bool "Enable serial console"
+        default y
+        help
+            Enable serial debug console.
+
 endmenu
