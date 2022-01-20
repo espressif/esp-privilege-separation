@@ -28,7 +28,17 @@
 #define EXCCAUSE_ECALL          11
 #define TOPOFSTACK_OFFS         0x00
 #define USERSTACK_OFFSET        0x30
+
+/*
+ * uxTCBNumber and uxTaskNumber members are added in TCB structure when
+ * FreeRTOS Trace facility is enabled. TLS pointer offset is changed
+ * by 8 bytes because both members are 4 bytes in size.
+ */
+#ifdef CONFIG_FREERTOS_USE_TRACE_FACILITY
+#define TLS_POINTER_OFFSET      (0x48 + 16 + 3 + 8)&~3
+#else
 #define TLS_POINTER_OFFSET      (0x48 + 16 + 3)&~3
+#endif
 
 #define MPIE_BIT                3
 

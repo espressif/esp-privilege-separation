@@ -40,10 +40,10 @@ index bed3d710bf..b20441103a 100644
  #define MALLOC_CAP_INVALID          (1<<31) ///< Memory can't be used / list end marker
  
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
-index 1006d5bea5..4fd9c47a25 100644
+index 1006d5bea5..c583e1d824 100644
 --- a/components/riscv/vectors.S
 +++ b/components/riscv/vectors.S
-@@ -16,9 +16,16 @@
+@@ -16,9 +16,26 @@
  #include "riscv/rvruntime-frames.h"
  #include "soc/soc_caps.h"
  #include "sdkconfig.h"
@@ -53,15 +53,25 @@ index 1006d5bea5..4fd9c47a25 100644
  
 +#define W1_EXCEPTION_MAGIC  21
 +#define EXCCAUSE_ECALL  11
-+#define WORLD_OFFSET    (0x4c + CONFIG_FREERTOS_MAX_TASK_NAME_LEN + 3)&~3
  
 -	.equ SAVE_REGS, 32
++/*
++ * uxTCBNumber and uxTaskNumber members are added in TCB structure when
++ * FreeRTOS Trace facility is enabled. WORLD offset is changed by 8 bytes
++ * because both members are 4 bytes in size.
++ */
++#ifdef CONFIG_FREERTOS_USE_TRACE_FACILITY
++#define WORLD_OFFSET    (0x4c + CONFIG_FREERTOS_MAX_TASK_NAME_LEN + 3 + 8)&~3
++#else
++#define WORLD_OFFSET    (0x4c + CONFIG_FREERTOS_MAX_TASK_NAME_LEN + 3)&~3
++#endif
++
 +    /* Save CSRs when servicing interrupts */
 +	.equ SAVE_REGS, 40
  	.equ CONTEXT_SIZE, (SAVE_REGS * 4)
  	.equ panic_from_exception, xt_unhandled_exception
  	.equ panic_from_isr, panicHandler
-@@ -61,6 +68,35 @@
+@@ -61,6 +78,35 @@
  	sw   t0, RV_STK_MEPC(sp)
  .endm
  
@@ -97,7 +107,7 @@ index 1006d5bea5..4fd9c47a25 100644
  .macro restore_regs
  	lw   ra,  RV_STK_RA(sp)
  	lw   tp,  RV_STK_TP(sp)
-@@ -99,6 +135,29 @@
+@@ -99,6 +145,29 @@
  	csrw	mepc, t0
  .endm
  
@@ -127,7 +137,7 @@ index 1006d5bea5..4fd9c47a25 100644
  	.global rtos_int_enter
  	.global rtos_int_exit
  	.global _global_interrupt_handler
-@@ -141,6 +200,35 @@ _vector_table:
+@@ -141,6 +210,35 @@ _vector_table:
  	/* Exception handler.*/
  	.type _panic_handler, @function
  _panic_handler:
@@ -163,7 +173,7 @@ index 1006d5bea5..4fd9c47a25 100644
  	addi sp, sp, -RV_STK_FRMSZ /* allocate space on stack to store necessary registers */
  	/* save general registers */
  	sw ra,  RV_STK_RA(sp)
-@@ -175,6 +263,22 @@ _panic_handler:
+@@ -175,6 +273,22 @@ _panic_handler:
  	sw t6,  RV_STK_T6(sp)
  	addi t0, sp, RV_STK_FRMSZ /* restore sp with the value when trap happened */
  	sw t0,  RV_STK_SP(sp)
@@ -186,7 +196,7 @@ index 1006d5bea5..4fd9c47a25 100644
  	csrr t0, mepc
  	sw t0,  RV_STK_MEPC(sp)
  	csrr t0, mstatus
-@@ -222,6 +326,43 @@ _interrupt_handler:
+@@ -222,6 +336,43 @@ _interrupt_handler:
  	/* entry */
  	save_regs
  	save_mepc
@@ -230,7 +240,7 @@ index 1006d5bea5..4fd9c47a25 100644
  
  	/* Before doing anythig preserve the stack pointer */
  	/* It will be saved in current TCB, if needed */
-@@ -294,6 +435,9 @@ _interrupt_handler:
+@@ -294,6 +445,9 @@ _interrupt_handler:
  	/* restore the rest of the registers */
  	csrw mcause, s1
  	csrw mstatus, s2

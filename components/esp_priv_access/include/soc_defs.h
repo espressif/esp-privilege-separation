@@ -109,6 +109,10 @@ static inline int is_valid_kernel_d_addr(void *ptr)
         return 1;
     }
 
+    if (ptr >= (void *)SOC_RTC_DRAM_LOW && ptr < (void *)SOC_RTC_DRAM_HIGH) {
+        return 1;
+    }
+
     return 0;
 }
 
