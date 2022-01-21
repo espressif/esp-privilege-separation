@@ -10,15 +10,15 @@ languages = ['en']
 idf_targets = ['esp32c3']
 
 # link roles config
-github_repo = 'espressif/esptool'
+github_repo = 'espressif/esp-privilege-separation'
 
 # context used by sphinx_idf_theme
 html_context['github_user'] = 'espressif'
-html_context['github_repo'] = 'esptool'
+html_context['github_repo'] = 'esp-privilege-separation'
 
 html_static_path = ['../_static']
 
 # Extra options required by sphinx_idf_theme
-project_slug = 'privilege_separation'
+project_slug = 'esp-privilege-separation'
 
 versions_url = '_static/privilege_separation_versions.js'

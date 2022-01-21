@@ -2,6 +2,7 @@ API Reference
 =============
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 1
 
    esp_priv_access.rst
+   esp_syscall.rst

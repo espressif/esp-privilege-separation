@@ -13,7 +13,7 @@
 # https://www.stack.nl/~dimitri/doxygen/manual/config.html
 
 
-PROJECT_NAME = "Privilege Separation Programming Guide"
+PROJECT_NAME = "ESP Privilege Separation Programming Guide"
 
 ## The 'INPUT' statement below is used as input by script 'gen-df-input.py'
 ## to automatically generate API reference list files heder_file.inc
@@ -21,9 +21,9 @@ PROJECT_NAME = "Privilege Separation Programming Guide"
 ## and used to include in API reference documentation
 
 INPUT = \
-    ## ESP PRIV ACCESS
     $(PROJECT_PATH)/components/esp_priv_access/include/esp_priv_access.h \
-    $(PROJECT_PATH)/components/esp_priv_access/include/permc_ll.h
+    $(PROJECT_PATH)/components/esp_priv_access/include/permc_ll.h \
+    $(PROJECT_PATH)/components/esp_syscall/include/syscall_wrappers.h
 
 ## Get warnings for functions that have no documentation for their parameters or return value
 ##

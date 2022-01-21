@@ -4,4 +4,6 @@ Technical Details
 .. toctree::
    :maxdepth: 4
 
-   technical_details.rst
+   Architecture <architecture>
+   System call <system-call>
+   Design choices <design-choices>
