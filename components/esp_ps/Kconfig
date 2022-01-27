@@ -51,6 +51,22 @@ menu "Privilege separation"
             bool "Reboot entire system (protected + user)"
     endchoice
 
+    config PS_PROTECTED_TASK_WDT_PANIC
+        bool "Panic on task watchdog timeout in protected space"
+        depends on ESP_TASK_WDT && !ESP_TASK_WDT_PANIC
+        default n
+        help
+            Invoke panic handler when task watchdog timeout occurs in any protected space task.
+            The entire system (protected + user) would be restarted
+
+    config PS_USER_TASK_WDT_PANIC
+        bool "Panic on task watchdog timeout in user space"
+        depends on ESP_TASK_WDT && !ESP_TASK_WDT_PANIC
+        default y
+        help
+            Invoke panic handler when task watchdog timeout occurs in any user space task.
+            The panic behavior will be as per the violation policy set above
+
     config PS_BACKTRACE_INFO
         bool "Print violating task backtrace info"
         default y

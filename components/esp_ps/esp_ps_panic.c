@@ -46,6 +46,8 @@ static const char *reason[] = {
     "Store page fault",
 };
 
+static bool _is_task_wdt_timeout;
+
 #ifdef CONFIG_PS_REBOOT_ENTIRE_SYSTEM
 // Digital reset ensures that the entire digital sub-system (including peripherals, WiFi, Timers, etc) is reset
 static void IRAM_ATTR esp_restart_noos_dig(void)
@@ -130,7 +132,12 @@ IRAM_ATTR void esp_ps_handle_crashed_task(void)
     ets_printf("\n=================================================\n");
     ets_printf("User app exception occurred:\n");
     if (intr != 0) {
-        ets_printf("Guru Meditation Error: Illegal %s access: Fault addr: 0x%x\n", esp_ps_int_type_to_str(intr), esp_ps_get_fault_addr(intr));
+        if (_is_task_wdt_timeout) {
+            ets_printf("Guru Meditation Error: Task WDT timeout\n");
+            _is_task_wdt_timeout = 0;
+        } else {
+            ets_printf("Guru Meditation Error: Illegal %s access: Fault addr: 0x%x\n", esp_ps_int_type_to_str(intr), esp_ps_get_fault_addr(intr));
+        }
         esp_ps_clear_and_reenable_int(intr);
     } else {
         ets_printf("Guru Meditation Error: %s\n", reason[mcause]);
@@ -164,3 +171,38 @@ IRAM_ATTR void esp_ps_handle_crashed_task(void)
     esp_restart_noos_dig();
 #endif
 }
+
+#if CONFIG_ESP_TASK_WDT && !CONFIG_ESP_TASK_WDT_PANIC
+static void crash_user_app()
+{
+    *(int *)0x0 = 0x0;
+}
+
+/*
+ *  Task WDT panic handling
+ *
+ * Define strong esp_task_wdt_isr_user_handler and panic from here
+ */
+void esp_task_wdt_isr_user_handler(void)
+{
+    StaticTask_t *handle = xTaskGetCurrentTaskHandle();
+
+    if (pvTaskGetThreadLocalStoragePointer(handle, 1) != NULL) {
+#if CONFIG_PS_USER_TASK_WDT_PANIC
+        /* This indicates that its a user space task.
+         * Change the return address to a crashing function, which results in user space exception
+         * and can be handled cleanly without interfering with the protected app
+         */
+        uint32_t *frame = handle->pxDummy1;
+        ((RvExcFrame *)frame)->mepc = (uint32_t)crash_user_app;
+        _is_task_wdt_timeout = 1;
+#endif
+    } else {
+#if CONFIG_PS_PROTECTED_TASK_WDT_PANIC
+        ESP_EARLY_LOGE(TAG, "Aborting.");
+        esp_reset_reason_set_hint(ESP_RST_TASK_WDT);
+        abort();
+#endif
+    }
+}
+#endif
