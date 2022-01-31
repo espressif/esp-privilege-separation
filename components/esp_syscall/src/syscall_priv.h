@@ -153,3 +153,21 @@ typedef struct {
     TimerHandle_t timerhandle;
 } usr_xtimer_context_t;
 
+typedef struct {
+    uint64_t alarm;
+    uint64_t period:56;
+    uint8_t flags;
+    union {
+        esp_timer_cb_t callback;
+        uint32_t event_id;
+    };
+    void* arg;
+#if WITH_PROFILING
+    const char* name;
+    size_t times_triggered;
+    size_t times_armed;
+    size_t times_skipped;
+    uint64_t total_callback_run_time;
+#endif // WITH_PROFILING
+    LIST_ENTRY(esp_timer) list_entry;
+} usr_esp_timer_handle_t;

@@ -49,13 +49,16 @@ extern void user_main(void);
 static QueueHandle_t usr_gpio_isr_queue;
 static QueueHandle_t usr_event_loop_queue;
 static QueueHandle_t usr_xtimer_handler_queue;
+static QueueHandle_t usr_esp_timer_handler_queue;
 static TaskHandle_t usr_event_loop_task_handle;
 static TaskHandle_t usr_gpio_isr_task_handle;
 static TaskHandle_t usr_xtimer_task_handle;
+static TaskHandle_t usr_esp_timer_task_handle;
 
 static uint8_t _event_handler_count;
 static uint8_t _gpio_handler_count;
 static uint8_t _timer_count;
+static uint8_t _esp_timer_count;
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -933,6 +936,89 @@ UIRAM_ATTR uint32_t usr_esp_random(void)
 void usr_esp_fill_random(void *buf, size_t len)
 {
     EXECUTE_SYSCALL(buf, len, __NR_esp_fill_random);
+}
+
+static void usr_esp_timer_task(void *arg)
+{
+    QueueHandle_t usr_queue = (QueueHandle_t)arg;
+    esp_timer_create_args_t usr_args;
+    while (1) {
+        usr_xQueueReceive(usr_queue, &usr_args, portMAX_DELAY);
+        if (is_valid_user_i_addr(usr_args.callback)) {
+            (usr_args.callback)(usr_args.arg);
+        }
+    }
+}
+
+esp_err_t usr_esp_timer_create(const esp_timer_create_args_t* create_args,
+        esp_timer_handle_t* out_handle, QueueHandle_t usr_queue)
+{
+    _esp_timer_count++; 
+    if (_esp_timer_count == 1) {
+        usr_esp_timer_handler_queue = usr_xQueueGenericCreate(10, sizeof(esp_timer_create_args_t), queueQUEUE_TYPE_BASE);
+        if (!usr_esp_timer_handler_queue) {
+            return ESP_FAIL;
+        }
+        usr_xTaskCreatePinnedToCore(usr_esp_timer_task, "User ESP-Timer dispatcher", 1024, usr_esp_timer_handler_queue, ESP_TASK_TIMER_PRIO, &usr_esp_timer_task_handle, 0);
+        if (!usr_esp_timer_task_handle) {
+            usr_vQueueDelete(usr_esp_timer_handler_queue);
+            return ESP_FAIL;
+        }
+    }
+
+    esp_err_t err = EXECUTE_SYSCALL(create_args, out_handle, usr_esp_timer_handler_queue, __NR_esp_timer_create);
+
+    if (err != ESP_OK) {
+        if (_esp_timer_count == 1) {
+            usr_vTaskDelete(usr_esp_timer_task_handle);
+            usr_vQueueDelete(usr_esp_timer_handler_queue);
+        }
+        _esp_timer_count--;
+    }
+    return err;
+}
+
+esp_err_t usr_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
+{
+    return EXECUTE_SYSCALL(timer, timeout_us, __NR_esp_timer_start_once);
+}
+
+esp_err_t usr_esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period)
+{
+    return EXECUTE_SYSCALL(timer, period, __NR_esp_timer_start_periodic);
+}
+
+esp_err_t usr_esp_timer_stop(esp_timer_handle_t timer)
+{
+    return EXECUTE_SYSCALL(timer, __NR_esp_timer_stop);
+}
+
+esp_err_t usr_esp_timer_delete(esp_timer_handle_t timer)
+{
+    esp_err_t err = EXECUTE_SYSCALL(timer, __NR_esp_timer_delete);
+    if (err == ESP_OK) {
+        if (_esp_timer_count == 1) {
+            usr_vTaskDelete(usr_esp_timer_task_handle);
+            usr_vQueueDelete(usr_esp_timer_handler_queue);
+        }
+        _esp_timer_count--;
+    }
+    return err;
+}
+
+UIRAM_ATTR int64_t usr_esp_timer_get_time(void)
+{
+    return EXECUTE_SYSCALL(__NR_esp_timer_get_time);
+}
+
+UIRAM_ATTR int64_t usr_esp_timer_get_next_alarm(void)
+{
+    return EXECUTE_SYSCALL(__NR_esp_timer_get_next_alarm);
+}
+
+bool usr_esp_timer_is_active(esp_timer_handle_t timer)
+{
+    return EXECUTE_SYSCALL(timer, __NR_esp_timer_is_active);
 }
 
 #ifdef __GNUC__

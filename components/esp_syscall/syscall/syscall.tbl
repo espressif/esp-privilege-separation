@@ -165,3 +165,13 @@
 
 1043  common  esp_random                              sys_esp_random
 1044  common  esp_fill_random                         sys_esp_fill_random
+
+# ESP-Timer
+1045  common  esp_timer_create                        sys_esp_timer_create
+1046  common  esp_timer_start_once                    sys_esp_timer_start_once
+1047  common  esp_timer_start_periodic                sys_esp_timer_start_periodic
+1048  common  esp_timer_stop                          sys_esp_timer_stop
+1049  common  esp_timer_delete                        sys_esp_timer_delete
+1050  common  esp_timer_get_time                      sys_esp_timer_get_time
+1051  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
+1052  common  esp_timer_is_active                     sys_esp_timer_is_active

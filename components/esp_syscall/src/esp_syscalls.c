@@ -54,6 +54,7 @@ typedef void (*syscall_t)(void);
 static DRAM_ATTR QueueHandle_t usr_gpio_isr_queue;
 static DRAM_ATTR QueueHandle_t usr_event_loop_queue;
 static DRAM_ATTR QueueHandle_t usr_xtimer_handler_queue;
+static DRAM_ATTR QueueHandle_t usr_esp_timer_queue;
 
 void esp_time_impl_set_boot_time(uint64_t time_us);
 uint64_t esp_time_impl_get_boot_time(void);
@@ -1277,6 +1278,96 @@ static void sys_esp_fill_random(void *buf, size_t len)
 static void *sys_realloc(void* ptr, size_t size)
 {
     return heap_caps_realloc(ptr, size, MALLOC_CAP_WORLD1);
+}
+
+static void sys_esp_timer_dispatch_cb(void* arg)
+{
+    if (xQueueSend(usr_esp_timer_queue, arg, portMAX_DELAY) == pdFALSE) {
+        ESP_LOGE(TAG, "Error sending message on queue");
+    }
+}
+
+esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
+        esp_timer_handle_t* out_handle, QueueHandle_t usr_queue)
+{
+    if (!is_valid_user_d_addr((void *)create_args) ||
+            !is_valid_user_d_addr(out_handle) ||
+            !usr_queue) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_timer_create_args_t *usr_args = (esp_timer_create_args_t *)heap_caps_malloc(sizeof(esp_timer_create_args_t), MALLOC_CAP_WORLD1);
+    if (!usr_args) {
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(usr_args, create_args, sizeof(esp_timer_create_args_t));
+    const esp_timer_create_args_t sys_create_args = {
+        .callback = sys_esp_timer_dispatch_cb,
+        .arg = usr_args,
+        .name = create_args->name,
+        .skip_unhandled_events = create_args->skip_unhandled_events,
+    };
+    usr_esp_timer_queue = usr_queue;
+    esp_err_t err = esp_timer_create(&sys_create_args, out_handle);
+    if (err != ESP_OK) {
+        free(usr_args);
+    }
+    return err;
+}
+
+esp_err_t sys_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
+{
+    if (!is_valid_kernel_d_addr(timer)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return esp_timer_start_once(timer, timeout_us);
+}
+
+esp_err_t sys_esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period)
+{
+    if (!is_valid_kernel_d_addr(timer)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return esp_timer_start_periodic(timer, period);
+}
+
+esp_err_t sys_esp_timer_stop(esp_timer_handle_t timer)
+{
+    if (!is_valid_kernel_d_addr(timer)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return esp_timer_stop(timer);
+}
+
+esp_err_t sys_esp_timer_delete(esp_timer_handle_t timer)
+{
+    if (!is_valid_kernel_d_addr(timer)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    usr_esp_timer_handle_t *handle = (usr_esp_timer_handle_t *)timer;
+    void *arg = handle->arg;
+    esp_err_t err = esp_timer_delete(timer);
+    if (err == ESP_OK) {
+        free(arg);
+    }
+    return err;
+}
+
+IRAM_ATTR int64_t sys_esp_timer_get_time(void)
+{
+    return esp_timer_get_time();
+}
+
+IRAM_ATTR int64_t sys_esp_timer_get_next_alarm(void)
+{
+    return esp_timer_get_next_alarm();
+}
+
+bool sys_esp_timer_is_active(esp_timer_handle_t timer)
+{
+    if (!is_valid_kernel_d_addr(timer)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return esp_timer_is_active(timer);
 }
 
 #ifdef __GNUC__
