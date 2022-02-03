@@ -61,4 +61,7 @@ else()
     set(image_file ${PROJECT_DIR}/build/user_app/user_app.bin)
     partition_table_get_partition_info(offset "--partition-name ${partition}" "offset")
     esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
+    # Add dependency of idf.py flash on user_app.
+    # This ensures user_app is rebuilt when idf.py flash command is used.
+    add_dependencies(flash user_app)
 endif()
