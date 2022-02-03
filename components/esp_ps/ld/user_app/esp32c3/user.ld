@@ -20,7 +20,7 @@ MEMORY
 
 SECTIONS
 {
-  .uiram :
+  .iram0.text :
   {
     _user_text_start = ABSOLUTE(.);
     _reserve_w1_iram_start = ABSOLUTE(.);
@@ -41,7 +41,7 @@ SECTIONS
 
   ASSERT(((_user_text_end - ORIGIN(iram_seg)) <= LENGTH(iram_seg)), "User IRAM does not fit.")
 
-  .data :
+  .dram0.data :
   {
     _user_data_start = ABSOLUTE(.);
     _reserve_w1_dram_start = ABSOLUTE(.);
@@ -51,7 +51,7 @@ SECTIONS
     _user_data_end = ABSOLUTE(.);
   } > dram_seg
 
-  .bss (NOLOAD) :
+  .dram0.bss (NOLOAD) :
   {
     _user_bss_start = ABSOLUTE(.);
 
@@ -66,7 +66,7 @@ SECTIONS
 
   ASSERT(((_user_bss_end - ORIGIN(dram_seg)) <= LENGTH(dram_seg)), "User DRAM does not fit.")
 
-  .flash_text :
+  .flash.text :
   {
     _user_xip_text_start = ABSOLUTE(.);
 
@@ -80,12 +80,12 @@ SECTIONS
 
   .flash_rodata_dummy (NOLOAD):
   {
-    . = SIZEOF(.flash_text);
+    . = SIZEOF(.flash.text);
     . = ALIGN(0x10000) + 0x20;
     _rodata_reserved_start = .;
   } > drom_seg
 
-  .flash_rodata :
+  .flash.rodata :
   {
     _user_rodata_start = ABSOLUTE(.);
 
