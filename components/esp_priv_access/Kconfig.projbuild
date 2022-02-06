@@ -38,7 +38,7 @@ menu "Privilege separation"
 
     choice PA_VIOLATION_POLICY
         prompt "User app violation policy"
-        default PA_RESTART_USER_APP
+        default PA_REBOOT_ENTIRE_SYSTEM
         help
             Policy for handling permission violation of user task. In case any user task violates
             its permission, handle the exception as per the policy selected
@@ -46,7 +46,14 @@ menu "Privilege separation"
         config PA_DELETE_VIOLATING_TASK
             bool "Delete only the violating user task"
         config PA_RESTART_USER_APP
-            bool "Restart user app"
+            bool "Restart user app (EXPERIMENTAL)"
+            help
+                When enabled, restart the user app without restarting the protected app.
+                When exception occurs in user space, the panic handler will delete
+                all the user space tasks and reboot user app
+
+                Note: This is still in experimental stage and there are few things that need to be addressed.
+                      One being heap cleanup and another being peripheral resources cleanup
         config PA_REBOOT_ENTIRE_SYSTEM
             bool "Reboot entire system (protected + user)"
     endchoice

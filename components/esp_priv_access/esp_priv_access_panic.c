@@ -48,26 +48,6 @@ static const char *reason[] = {
 
 static bool _is_task_wdt_timeout;
 
-#ifdef CONFIG_PA_REBOOT_ENTIRE_SYSTEM
-// Digital reset ensures that the entire digital sub-system (including peripherals, WiFi, Timers, etc) is reset
-static void IRAM_ATTR esp_restart_noos_dig(void)
-{
-    // make sure all the panic handler output is sent from UART FIFO
-    if (CONFIG_ESP_CONSOLE_UART_NUM >= 0) {
-        esp_rom_uart_tx_wait_idle(CONFIG_ESP_CONSOLE_UART_NUM);
-    }
-
-    // switch to XTAL (otherwise we will keep running from the PLL)
-    rtc_clk_cpu_freq_set_xtal();
-
-    // reset the digital part
-    SET_PERI_REG_MASK(RTC_CNTL_OPTIONS0_REG, RTC_CNTL_SW_SYS_RST);
-    while (true) {
-        ;
-    }
-}
-#endif
-
 #ifdef CONFIG_PA_BACKTRACE_INFO
 static void panic_print_registers(const void *f, int core)
 {
