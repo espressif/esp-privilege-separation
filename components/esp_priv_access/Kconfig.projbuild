@@ -2,7 +2,7 @@ menu "Privilege separation"
 
     menu "Memory allocation"
 
-    config PS_ALLOCATE_USER_IRAM_SIZE
+    config PA_ALLOCATE_USER_IRAM_SIZE
         hex "Allocate IRAM space for user application"
         range 0 0x10000
         default 0x800
@@ -10,23 +10,23 @@ menu "Privilege separation"
             Allocate IRAM for user space application. This size will reflect in the user_app as well.
             This is the size of IRAM that would be dedicated for user space code.
 
-    choice PS_MEMORY_ALLOCATION_POLICY
+    choice PA_MEMORY_ALLOCATION_POLICY
         prompt "Memory allocation policy"
-        default PS_MEMORY_ALLOCATE_USER
+        default PA_MEMORY_ALLOCATE_USER
         help
             Choose the DRAM memory allocation policy.
-            Either allocate DRAM memory for protected app or for user app. The size configured by PS_ALLOCATE_DRAM_SIZE will be
+            Either allocate DRAM memory for protected app or for user app. The size configured by PA_ALLOCATE_DRAM_SIZE will be
             allocated to the chosen execution environment and the remaining DRAM memory will be allocated
             to the other execution environment.
 
-        config PS_MEMORY_ALLOCATE_PROTECTED
+        config PA_MEMORY_ALLOCATE_PROTECTED
             bool "Allocate to protected app"
 
-        config PS_MEMORY_ALLOCATE_USER
+        config PA_MEMORY_ALLOCATE_USER
             bool "Allocate to user app"
     endchoice
 
-    config PS_ALLOCATE_DRAM_SIZE
+    config PA_ALLOCATE_DRAM_SIZE
         hex "Allocate DRAM space for chosen execution environment"
         range 0 0x40000
         default 0x19000
@@ -36,22 +36,22 @@ menu "Privilege separation"
             This DRAM size is for data, bss and heap memory combined.
     endmenu
 
-    choice PS_VIOLATION_POLICY
+    choice PA_VIOLATION_POLICY
         prompt "User app violation policy"
-        default PS_RESTART_USER_APP
+        default PA_RESTART_USER_APP
         help
             Policy for handling permission violation of user task. In case any user task violates
             its permission, handle the exception as per the policy selected
 
-        config PS_DELETE_VIOLATING_TASK
+        config PA_DELETE_VIOLATING_TASK
             bool "Delete only the violating user task"
-        config PS_RESTART_USER_APP
+        config PA_RESTART_USER_APP
             bool "Restart user app"
-        config PS_REBOOT_ENTIRE_SYSTEM
+        config PA_REBOOT_ENTIRE_SYSTEM
             bool "Reboot entire system (protected + user)"
     endchoice
 
-    config PS_PROTECTED_TASK_WDT_PANIC
+    config PA_PROTECTED_TASK_WDT_PANIC
         bool "Panic on task watchdog timeout in protected space"
         depends on ESP_TASK_WDT && !ESP_TASK_WDT_PANIC
         default n
@@ -59,7 +59,7 @@ menu "Privilege separation"
             Invoke panic handler when task watchdog timeout occurs in any protected space task.
             The entire system (protected + user) would be restarted
 
-    config PS_USER_TASK_WDT_PANIC
+    config PA_USER_TASK_WDT_PANIC
         bool "Panic on task watchdog timeout in user space"
         depends on ESP_TASK_WDT && !ESP_TASK_WDT_PANIC
         default y
@@ -67,7 +67,7 @@ menu "Privilege separation"
             Invoke panic handler when task watchdog timeout occurs in any user space task.
             The panic behavior will be as per the violation policy set above
 
-    config PS_BACKTRACE_INFO
+    config PA_BACKTRACE_INFO
         bool "Print violating task backtrace info"
         default y
         help

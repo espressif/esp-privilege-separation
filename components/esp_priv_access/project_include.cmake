@@ -46,11 +46,11 @@ set(DEFSYM_LIST ${defsym_list})
 
 # Extract the memory boundaries from the protected_app ELF.
 # Pass these memory boundaries to user_app as its starting region
-idf_component_get_property(esp_ps_dir esp_ps COMPONENT_DIR)
+idf_component_get_property(esp_priv_access_dir esp_priv_access COMPONENT_DIR)
 
 add_custom_command(
     OUTPUT ${config_dir}/memory_layout.h
-    COMMAND ${esp_ps_dir}/utility/extract_memory_boundaries.sh ${toolprefix} ${build_dir}/${PROJECT_NAME}.elf ${config_dir}/memory_layout.h
+    COMMAND ${esp_priv_access_dir}/utility/extract_memory_boundaries.sh ${toolprefix} ${build_dir}/${PROJECT_NAME}.elf ${config_dir}/memory_layout.h
     DEPENDS ${build_dir}/${PROJECT_NAME}.elf
     VERBATIM)
 

@@ -16,7 +16,7 @@
  *
  * This file is for protected application.
  * Developer can write routines which need to execute in protected space
- * In order to start user application, initialize esp_ps and call esp_ps_user_boot
+ * In order to start user application, initialize esp_priv_access and call esp_priv_access_user_boot
  */
 
 #include <stdio.h>
@@ -25,7 +25,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "esp_ps.h"
+#include "esp_priv_access.h"
 
 #define TAG             "protected_app"
 
@@ -33,15 +33,15 @@ IRAM_ATTR void app_main()
 {
     esp_err_t ret;
 
-    ret = esp_ps_init(NULL);
+    ret = esp_priv_access_init(NULL);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize PS %d\n", ret);
     }
 
     // Deny access to GPIO
-    esp_ps_set_periph_perm(PS_GPIO, PS_WORLD_1, PS_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_GPIO, PA_WORLD_1, PA_PERM_NONE);
 
-    ret = esp_ps_user_boot();
+    ret = esp_priv_access_user_boot();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to boot user app %d\n", ret);
     }

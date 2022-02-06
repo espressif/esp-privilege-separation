@@ -11,7 +11,7 @@ SECTIONS
         /* C3 PMS controller has a granularity of 512 bytes */
         . = ALIGN (0x200);
         _reserve_w1_iram_start = ABSOLUTE(.);
-        . += CONFIG_PS_ALLOCATE_USER_IRAM_SIZE;
+        . += CONFIG_PA_ALLOCATE_USER_IRAM_SIZE;
         . += 16;
         . = ALIGN (0x200);
         _reserve_w1_iram_end = ABSOLUTE(.);
@@ -24,10 +24,10 @@ SECTIONS
          * 0x3FCDF060 - 0x3FCE0000 space is reserved for ROM code so to avoid
          * overlapping for reserved memory regions, treat 0x3FCDF060 as the end of DRAM region
          */
-#if CONFIG_PS_MEMORY_ALLOCATE_PROTECTED
-        _reserve_w1_dram_start = ABSOLUTE(_data_start + CONFIG_PS_ALLOCATE_DRAM_SIZE);
-#elif CONFIG_PS_MEMORY_ALLOCATE_USER
-        _reserve_w1_dram_start = ABSOLUTE(0x3FCDF060 - CONFIG_PS_ALLOCATE_DRAM_SIZE);
+#if CONFIG_PA_MEMORY_ALLOCATE_PROTECTED
+        _reserve_w1_dram_start = ABSOLUTE(_data_start + CONFIG_PA_ALLOCATE_DRAM_SIZE);
+#elif CONFIG_PA_MEMORY_ALLOCATE_USER
+        _reserve_w1_dram_start = ABSOLUTE(0x3FCDF060 - CONFIG_PA_ALLOCATE_DRAM_SIZE);
 #endif
         /* Align the starting boundary to 512 bytes as it is a requirement for the PMS split line */
         _reserve_w1_dram_start = ABSOLUTE((_reserve_w1_dram_start + 0x200 - 1) & ~(0x200 - 1));

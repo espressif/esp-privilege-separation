@@ -18,8 +18,8 @@
 #include <esp_partition.h>
 #include "esp_log.h"
 #include "esp_intr_alloc.h"
-#include "esp_ps.h"
-#include "esp_ps_priv.h"
+#include "esp_priv_access.h"
+#include "esp_priv_access_priv.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "riscv/interrupt.h"
@@ -40,7 +40,7 @@
 #define TAG             "esp_ps"
 #define RV_INT_NUM      2
 
-#define PS_INTR_ATTR IRAM_ATTR __attribute__((noinline))
+#define PA_INTR_ATTR IRAM_ATTR __attribute__((noinline))
 
 extern intptr_t _vector_table;
 
@@ -48,55 +48,55 @@ extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
 extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
 extern int _iram_end;
 
-static esp_ps_intr_handler_t intr_func;
+static esp_priv_access_intr_handler_t intr_func;
 
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_end, world1_dram);
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_iram_start, (int)&_reserve_w1_iram_end, world1_iram);
 
-static void esp_ps_iram_int_en(uint8_t int_num)
+static void esp_priv_access_iram_int_en(uint8_t int_num)
 {
     permc_ll_iram_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_iram_get_int_source_num(), int_num);
 }
 
-static void esp_ps_dram_int_en(uint8_t int_num)
+static void esp_priv_access_dram_int_en(uint8_t int_num)
 {
     permc_ll_dram_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_dram_get_int_source_num(), int_num);
 }
 
-static void esp_ps_flash_cache_int_en(uint8_t int_num)
+static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
 {
     permc_ll_flash_icache_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_flash_cache_get_int_source_num(), int_num);
 }
 
-static void esp_ps_pif_int_en(uint8_t int_num)
+static void esp_priv_access_pif_int_en(uint8_t int_num)
 {
     permc_ll_pif_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_pif_get_int_source_num(), int_num);
 }
 
-static PS_INTR_ATTR void esp_ps_violation_intr_func(void *args)
+static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
 {
     if (esp_ptr_executable(intr_func)) {
         intr_func(args);
     }
 
-    esp_ps_handle_crashed_task();
+    esp_priv_access_handle_crashed_task();
 }
 
-static esp_err_t esp_ps_int_init(esp_ps_intr_handler_t fn)
+static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
 {
     wcntl_ll_set_mtvec_base((uint32_t)&_vector_table);
 
     wcntl_ll_set_entry_check(0xFFFFFFFF);
 
-    intr_handler_set(RV_INT_NUM, esp_ps_violation_intr_func, NULL);
+    intr_handler_set(RV_INT_NUM, esp_priv_access_violation_intr_func, NULL);
 
     intr_func = fn;
 
@@ -105,21 +105,21 @@ static esp_err_t esp_ps_int_init(esp_ps_intr_handler_t fn)
     esprv_intc_int_set_type(BIT(RV_INT_NUM), INTR_TYPE_LEVEL);
     esprv_intc_int_set_priority(RV_INT_NUM, 3);
 
-    esp_ps_iram_int_en(RV_INT_NUM);
-    esp_ps_dram_int_en(RV_INT_NUM);
-    esp_ps_flash_cache_int_en(RV_INT_NUM);
-    esp_ps_pif_int_en(RV_INT_NUM);
+    esp_priv_access_iram_int_en(RV_INT_NUM);
+    esp_priv_access_dram_int_en(RV_INT_NUM);
+    esp_priv_access_flash_cache_int_en(RV_INT_NUM);
+    esp_priv_access_pif_int_en(RV_INT_NUM);
 
     return ESP_OK;
 }
 
-static void esp_ps_irom_config()
+static void esp_priv_access_irom_config()
 {
     permc_ll_irom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_irom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
-static void esp_ps_iram_config()
+static void esp_priv_access_iram_config()
 {
     permc_ll_icache_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_icache_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
@@ -141,13 +141,13 @@ static void esp_ps_iram_config()
     permc_ll_iram_set_perm(PERMC_AREA_3, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
-static void esp_ps_drom_config()
+static void esp_priv_access_drom_config()
 {
     permc_ll_drom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_drom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
-static void esp_ps_dram_config()
+static void esp_priv_access_dram_config()
 {
     permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_dram_start);
 
@@ -166,7 +166,7 @@ static void esp_ps_dram_config()
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
-static void esp_ps_rtc_config()
+static void esp_priv_access_rtc_config()
 {
     permc_ll_rtc_set_split_line(PERMC_WORLD_0, SOC_RTC_IRAM_LOW);
     permc_ll_rtc_set_split_line(PERMC_WORLD_1, SOC_RTC_IRAM_LOW);
@@ -179,7 +179,7 @@ static void esp_ps_rtc_config()
     permc_ll_rtc_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
-static IRAM_ATTR void esp_ps_flash_cache_config()
+static IRAM_ATTR void esp_priv_access_flash_cache_config()
 {
     /* Invalidate Cache */
     Cache_Invalidate_ICache_All();
@@ -196,82 +196,82 @@ static IRAM_ATTR void esp_ps_flash_cache_config()
     permc_ll_flash_icache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
 }
 
-static void esp_ps_revoke_world1_peripheral_permissions(void)
+static void esp_priv_access_revoke_world1_peripheral_permissions(void)
 {
-    esp_ps_set_periph_perm(PS_UART1, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_I2C, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_MISC, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_WDG, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_IO_MUX, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_RTC, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_TIMER, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_FE, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_FE2, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_GPIO, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_G0SPI_0, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_G0SPI_1, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_UART, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_SYSTIMER, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_TIMERGROUP1, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_TIMERGROUP, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_BB, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_LEDC, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_RMT, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_UHCI0, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_I2C_EXT0, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_BT, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_PWR, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_WIFIMAC, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_RWBT, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_I2S1, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_CAN, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_APB_CTRL, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_SPI_2, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_WORLD_CONTROLLER, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_DIO, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_AD, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_CACHE_CONFIG, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_DMA_COPY, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_INTERRUPT, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_SENSITIVE, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_SYSTEM, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_USB_DEVICE, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_BT_PWR, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_APB_ADC, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_CRYPTO_DMA, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_CRYPTO_PERI, PS_WORLD_1, PS_PERM_NONE);
-    esp_ps_set_periph_perm(PS_USB_WRAP, PS_WORLD_1, PS_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_UART1, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_I2C, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_MISC, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_WDG, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_IO_MUX, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_RTC, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_TIMER, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_FE, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_FE2, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_GPIO, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_G0SPI_0, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_G0SPI_1, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_UART, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SYSTIMER, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_TIMERGROUP1, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_TIMERGROUP, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_BB, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_LEDC, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_RMT, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_UHCI0, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_I2C_EXT0, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_BT, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_PWR, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_WIFIMAC, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_RWBT, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_I2S1, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_CAN, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_APB_CTRL, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SPI_2, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_WORLD_CONTROLLER, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_DIO, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_AD, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_CACHE_CONFIG, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_DMA_COPY, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_INTERRUPT, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SENSITIVE, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SYSTEM, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_USB_DEVICE, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_BT_PWR, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_APB_ADC, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_CRYPTO_DMA, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_CRYPTO_PERI, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_USB_WRAP, PA_WORLD_1, PA_PERM_NONE);
 }
 
-esp_err_t esp_ps_init(esp_ps_intr_handler_t fn)
+esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
 {
     if (esp_memprot_is_locked_any()) {
         ESP_LOGE(TAG, "Permission registers already configured");
         return ESP_FAIL;
     }
 
-    esp_ps_int_init(fn);
+    esp_priv_access_int_init(fn);
 
     permc_ll_sram_set_split_line((intptr_t)&_iram_end);
 
-    esp_ps_irom_config();
+    esp_priv_access_irom_config();
 
-    esp_ps_drom_config();
+    esp_priv_access_drom_config();
 
-    esp_ps_iram_config();
+    esp_priv_access_iram_config();
 
-    esp_ps_dram_config();
+    esp_priv_access_dram_config();
 
-    esp_ps_rtc_config();
+    esp_priv_access_rtc_config();
 
-    esp_ps_flash_cache_config();
+    esp_priv_access_flash_cache_config();
 
-    esp_ps_revoke_world1_peripheral_permissions();
+    esp_priv_access_revoke_world1_peripheral_permissions();
 
     return ESP_OK;
 }
 
-IRAM_ATTR esp_err_t esp_ps_user_spawn_task(void *user_entry, uint32_t stack_sz)
+IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t stack_sz)
 {
     TaskHandle_t handle;
 
@@ -315,7 +315,7 @@ IRAM_ATTR esp_err_t esp_ps_user_spawn_task(void *user_entry, uint32_t stack_sz)
     return ESP_OK;
 }
 
-esp_err_t esp_ps_user_set_entry(void *user_entry)
+esp_err_t esp_priv_access_user_set_entry(void *user_entry)
 {
     if (!is_valid_user_i_addr(user_entry)) {
         return ESP_FAIL;
@@ -352,16 +352,16 @@ static void register_heap()
     ESP_LOGI(TAG, "heap: At %08X len %08X (%d KiB): W1DRAM", app_desc.user_app_heap_start, w1_heap_size, w1_heap_size / 1024);
 }
 
-IRAM_ATTR esp_err_t esp_ps_user_boot()
+IRAM_ATTR esp_err_t esp_priv_access_user_boot()
 {
     esp_image_metadata_t user_img_data = {0};
-    esp_err_t ret = esp_ps_user_unpack(&user_img_data);
+    esp_err_t ret = esp_priv_access_user_unpack(&user_img_data);
     if (ret == ESP_OK) {
         void *user_entry = (void *)user_img_data.image.entry_addr;
-        ret = esp_ps_user_set_entry(user_entry);
+        ret = esp_priv_access_user_set_entry(user_entry);
         if (ret == ESP_OK) {
             register_heap();
-            ret = esp_ps_user_spawn_task(user_entry, 4096);
+            ret = esp_priv_access_user_spawn_task(user_entry, 4096);
         }
     }
      return ret;
@@ -395,7 +395,7 @@ static void cleanup_user_tasks()
 
 static void oneshot_timer_callback(void* arg)
 {
-    esp_ps_user_boot();
+    esp_priv_access_user_boot();
 }
 
 static void reboot_user_app()
@@ -411,44 +411,44 @@ static void reboot_user_app()
     esp_timer_start_once(oneshot_timer, 1*1000*1000);
 }
 
-IRAM_ATTR void esp_ps_user_reboot()
+IRAM_ATTR void esp_priv_access_user_reboot()
 {
     cleanup_user_tasks();
     reboot_user_app();
 }
 
-IRAM_ATTR char *esp_ps_int_type_to_str(esp_ps_int_t int_type)
+IRAM_ATTR char *esp_priv_access_int_type_to_str(esp_priv_access_int_t int_type)
 {
     switch(int_type) {
-        case PS_IRAM_INT:
+        case PA_IRAM_INT:
             return "IRAM";
-        case PS_DRAM_INT:
+        case PA_DRAM_INT:
             return "DRAM";
-        case PS_FLASH_ICACHE_INT:
+        case PA_FLASH_ICACHE_INT:
             return "Flash Icache";
-        case PS_RTC_INT:
+        case PA_RTC_INT:
             return "RTC";
-        case PS_PERIPH_INT:
+        case PA_PERIPH_INT:
             return "Peripheral";
         default:
             return "Invalid";
     }
 }
 
-IRAM_ATTR void esp_ps_enable_int(esp_ps_int_t int_type)
+IRAM_ATTR void esp_priv_access_enable_int(esp_priv_access_int_t int_type)
 {
     switch(int_type) {
-        case PS_IRAM_INT:
+        case PA_IRAM_INT:
             permc_ll_iram_enable_int();
             break;
-        case PS_DRAM_INT:
+        case PA_DRAM_INT:
             permc_ll_dram_enable_int();
             break;
-        case PS_FLASH_ICACHE_INT:
+        case PA_FLASH_ICACHE_INT:
             permc_ll_flash_icache_enable_int();
             break;
-        case PS_RTC_INT:
-        case PS_PERIPH_INT:
+        case PA_RTC_INT:
+        case PA_PERIPH_INT:
             permc_ll_pif_enable_int();
             break;
         default:
@@ -457,23 +457,23 @@ IRAM_ATTR void esp_ps_enable_int(esp_ps_int_t int_type)
     }
 }
 
-IRAM_ATTR void esp_ps_clear_and_reenable_int(esp_ps_int_t int_type)
+IRAM_ATTR void esp_priv_access_clear_and_reenable_int(esp_priv_access_int_t int_type)
 {
     switch(int_type) {
-        case PS_IRAM_INT:
+        case PA_IRAM_INT:
             permc_ll_iram_clear_int();
             permc_ll_iram_enable_int();
             break;
-        case PS_DRAM_INT:
+        case PA_DRAM_INT:
             permc_ll_dram_clear_int();
             permc_ll_dram_enable_int();
             break;
-        case PS_FLASH_ICACHE_INT:
+        case PA_FLASH_ICACHE_INT:
             permc_ll_flash_icache_clear_int();
             permc_ll_flash_icache_enable_int();
             break;
-        case PS_RTC_INT:
-        case PS_PERIPH_INT:
+        case PA_RTC_INT:
+        case PA_PERIPH_INT:
             permc_ll_pif_clear_int();
             permc_ll_pif_enable_int();
             break;
@@ -483,46 +483,46 @@ IRAM_ATTR void esp_ps_clear_and_reenable_int(esp_ps_int_t int_type)
     }
 }
 
-IRAM_ATTR esp_ps_int_t esp_ps_get_int_status()
+IRAM_ATTR esp_priv_access_int_t esp_priv_access_get_int_status()
 {
-    esp_ps_int_t int_status = 0;
+    esp_priv_access_int_t int_status = 0;
 
     if (permc_ll_iram_get_int_status()) {
-        int_status = PS_IRAM_INT;
+        int_status = PA_IRAM_INT;
     } else if (permc_ll_dram_get_int_status()) {
-        int_status = PS_DRAM_INT;
+        int_status = PA_DRAM_INT;
     } else if (permc_ll_flash_icache_get_int_status()) {
-        int_status = PS_FLASH_ICACHE_INT;
+        int_status = PA_FLASH_ICACHE_INT;
     } else if (permc_ll_pif_get_int_status()) {
         uint32_t addr = permc_ll_pif_get_fault_addr();
         if (addr >= SOC_RTC_IRAM_LOW && addr < SOC_RTC_IRAM_HIGH) {
-            int_status = PS_RTC_INT;
+            int_status = PA_RTC_INT;
         } else {
-            int_status = PS_PERIPH_INT;
+            int_status = PA_PERIPH_INT;
         }
     }
 
     return int_status;
 }
 
-IRAM_ATTR uint32_t esp_ps_get_fault_addr(esp_ps_int_t int_type)
+IRAM_ATTR uint32_t esp_priv_access_get_fault_addr(esp_priv_access_int_t int_type)
 {
     switch (int_type) {
-        case PS_IRAM_INT:
+        case PA_IRAM_INT:
             return permc_ll_iram_get_fault_addr();
-        case PS_DRAM_INT:
+        case PA_DRAM_INT:
             return permc_ll_dram_get_fault_addr();
-        case PS_FLASH_ICACHE_INT:
+        case PA_FLASH_ICACHE_INT:
             return permc_ll_flash_icache_get_fault_addr();
-        case PS_RTC_INT:
-        case PS_PERIPH_INT:
+        case PA_RTC_INT:
+        case PA_PERIPH_INT:
             return permc_ll_pif_get_fault_addr();
         default:
             return 0xFFFFFFFF;
     }
 }
 
-esp_err_t esp_ps_set_periph_perm(esp_ps_periph_t periph, esp_ps_world_t world, esp_ps_perm_t perm)
+esp_err_t esp_priv_access_set_periph_perm(esp_priv_access_periph_t periph, esp_priv_access_world_t world, esp_priv_access_perm_t perm)
 {
     permc_ll_pif_set_perm(periph, world, perm);
     return ESP_OK;

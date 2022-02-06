@@ -37,7 +37,7 @@
 #include "freertos/task.h"
 #include "soc_defs.h"
 
-#define TAG "esp_ps_image_utility"
+#define TAG "esp_priv_access_image_utility"
 
 /* Cache MMU block size */
 #define MMU_BLOCK_SIZE    0x00010000
@@ -118,7 +118,7 @@ static IRAM_ATTR NOINLINE_ATTR void user_load_app(const esp_image_metadata_t* da
     kernel_cache_restore(ret);
 }
 
-esp_err_t esp_ps_user_unpack(esp_image_metadata_t *user_img_data)
+esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data)
 {
     const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
     if (user_partition == NULL) {

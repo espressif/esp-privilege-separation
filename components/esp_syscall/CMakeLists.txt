@@ -15,7 +15,7 @@ set(includes
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
-                    REQUIRES esp_wifi nvs_flash esp-tls esp_ps)
+                    REQUIRES esp_wifi nvs_flash esp-tls esp_priv_access)
 
 set(syscallhdr_sh
     ${COMPONENT_DIR}/syscall/syscallhdr.sh ${COMPONENT_DIR}/syscall/syscall.tbl

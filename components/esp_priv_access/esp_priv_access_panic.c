@@ -20,12 +20,12 @@
 #include "soc/rtc.h"
 #include "soc/soc.h"
 #include "esp_rom_uart.h"
-#include "esp_ps.h"
+#include "esp_priv_access.h"
 #include "esp_private/system_internal.h"
 
 #define INTR_FRAME_SIZE             160      // This value should be same as CONTEXT_SIZE defined in vectors.S
 
-static __attribute__((unused)) const char *TAG = "esp_ps_panic";
+static __attribute__((unused)) const char *TAG = "esp_priv_access_panic";
 
 static const char *reason[] = {
     "Instruction address misaligned",
@@ -48,7 +48,7 @@ static const char *reason[] = {
 
 static bool _is_task_wdt_timeout;
 
-#ifdef CONFIG_PS_REBOOT_ENTIRE_SYSTEM
+#ifdef CONFIG_PA_REBOOT_ENTIRE_SYSTEM
 // Digital reset ensures that the entire digital sub-system (including peripherals, WiFi, Timers, etc) is reset
 static void IRAM_ATTR esp_restart_noos_dig(void)
 {
@@ -68,7 +68,7 @@ static void IRAM_ATTR esp_restart_noos_dig(void)
 }
 #endif
 
-#ifdef CONFIG_PS_BACKTRACE_INFO
+#ifdef CONFIG_PA_BACKTRACE_INFO
 static void panic_print_registers(const void *f, int core)
 {
     uint32_t *regs = (uint32_t *)f;
@@ -114,7 +114,7 @@ static void print_stack_dump(void *frame)
  *
  * Later on, temporarily disable the interrupt watchdog while handling crashed task
  */
-IRAM_ATTR void esp_ps_handle_crashed_task(void)
+IRAM_ATTR void esp_priv_access_handle_crashed_task(void)
 {
     StaticTask_t *curr_handle = xTaskGetCurrentTaskHandle();
     /* Interrupt vector stores the exception stack frame
@@ -128,7 +128,7 @@ IRAM_ATTR void esp_ps_handle_crashed_task(void)
 
     uint32_t mcause = ((RvExcFrame *)frame)->mcause;
 
-    esp_ps_int_t intr = esp_ps_get_int_status();
+    esp_priv_access_int_t intr = esp_priv_access_get_int_status();
     ets_printf("\n=================================================\n");
     ets_printf("User app exception occurred:\n");
     if (intr != 0) {
@@ -136,16 +136,16 @@ IRAM_ATTR void esp_ps_handle_crashed_task(void)
             ets_printf("Guru Meditation Error: Task WDT timeout\n");
             _is_task_wdt_timeout = 0;
         } else {
-            ets_printf("Guru Meditation Error: Illegal %s access: Fault addr: 0x%x\n", esp_ps_int_type_to_str(intr), esp_ps_get_fault_addr(intr));
+            ets_printf("Guru Meditation Error: Illegal %s access: Fault addr: 0x%x\n", esp_priv_access_int_type_to_str(intr), esp_priv_access_get_fault_addr(intr));
         }
-        esp_ps_clear_and_reenable_int(intr);
+        esp_priv_access_clear_and_reenable_int(intr);
     } else {
         ets_printf("Guru Meditation Error: %s\n", reason[mcause]);
     }
     ets_printf("Troubling task: %s\n", pcTaskGetName(NULL));
     ets_printf("=================================================\n");
 
-#ifdef CONFIG_PS_BACKTRACE_INFO
+#ifdef CONFIG_PA_BACKTRACE_INFO
     panic_print_registers(frame, 0);
     print_stack_dump(frame);
 
@@ -155,17 +155,17 @@ IRAM_ATTR void esp_ps_handle_crashed_task(void)
     ets_printf("=================================================\n");
 #endif
 
-#ifdef CONFIG_PS_DELETE_VIOLATING_TASK
+#ifdef CONFIG_PA_DELETE_VIOLATING_TASK
     ets_printf("Deleting %s...\n", pcTaskGetName(curr_handle));
     vTaskDelete(curr_handle);
     ets_printf("=================================================\n");
     portYIELD_FROM_ISR();
-#elif CONFIG_PS_RESTART_USER_APP
-    esp_ps_user_reboot();
+#elif CONFIG_PA_RESTART_USER_APP
+    esp_priv_access_user_reboot();
     ets_printf("Restarting user_app...\n");
     ets_printf("=================================================\n");
     portYIELD_FROM_ISR();
-#elif CONFIG_PS_REBOOT_ENTIRE_SYSTEM
+#elif CONFIG_PA_REBOOT_ENTIRE_SYSTEM
     ets_printf("Rebooting...\n");
     ets_printf("=================================================\n");
     esp_restart_noos_dig();
@@ -188,7 +188,7 @@ void esp_task_wdt_isr_user_handler(void)
     StaticTask_t *handle = xTaskGetCurrentTaskHandle();
 
     if (pvTaskGetThreadLocalStoragePointer(handle, 1) != NULL) {
-#if CONFIG_PS_USER_TASK_WDT_PANIC
+#if CONFIG_PA_USER_TASK_WDT_PANIC
         /* This indicates that its a user space task.
          * Change the return address to a crashing function, which results in user space exception
          * and can be handled cleanly without interfering with the protected app
@@ -198,7 +198,7 @@ void esp_task_wdt_isr_user_handler(void)
         _is_task_wdt_timeout = 1;
 #endif
     } else {
-#if CONFIG_PS_PROTECTED_TASK_WDT_PANIC
+#if CONFIG_PA_PROTECTED_TASK_WDT_PANIC
         ESP_EARLY_LOGE(TAG, "Aborting.");
         esp_reset_reason_set_hint(ESP_RST_TASK_WDT);
         abort();
