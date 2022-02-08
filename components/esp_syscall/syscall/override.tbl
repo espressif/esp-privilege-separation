@@ -7,3 +7,5 @@
 6   common  heap_caps_calloc                        usr_heap_caps_calloc
 7   common  heap_caps_free                          usr_heap_caps_free
 8   common  heap_caps_realloc_default               usr_realloc
+9   common  xPortInIsrContext                       usr_xPortInIsrContext
+10  common  spi_flash_cache_enabled                 usr_spi_flash_cache_enabled

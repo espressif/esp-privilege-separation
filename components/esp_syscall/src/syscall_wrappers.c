@@ -574,6 +574,11 @@ void usr_vEventGroupDelete(EventGroupHandle_t xEventGroup)
     EXECUTE_SYSCALL(xEventGroup, __NR_vEventGroupDelete);
 }
 
+BaseType_t usr_xPortInIsrContext(void)
+{
+    return 0;
+}
+
 int usr_lwip_socket(int domain, int type, int protocol)
 {
     return EXECUTE_SYSCALL(domain, type, protocol, __NR_lwip_socket);
@@ -1019,6 +1024,17 @@ UIRAM_ATTR int64_t usr_esp_timer_get_next_alarm(void)
 bool usr_esp_timer_is_active(esp_timer_handle_t timer)
 {
     return EXECUTE_SYSCALL(timer, __NR_esp_timer_is_active);
+}
+
+int64_t UIRAM_ATTR usr_esp_system_get_time(void)
+{
+    return EXECUTE_SYSCALL(__NR_esp_system_get_time);
+}
+
+UIRAM_ATTR bool usr_spi_flash_cache_enabled(void)
+{
+    // Flash cache will always be enabled in user app.
+    return true;
 }
 
 #ifdef __GNUC__

@@ -175,3 +175,4 @@
 1050  common  esp_timer_get_time                      sys_esp_timer_get_time
 1051  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
 1052  common  esp_timer_is_active                     sys_esp_timer_is_active
+1053  common  esp_system_get_time                     sys_esp_system_get_time

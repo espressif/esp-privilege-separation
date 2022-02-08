@@ -58,6 +58,7 @@ static DRAM_ATTR QueueHandle_t usr_esp_timer_queue;
 
 void esp_time_impl_set_boot_time(uint64_t time_us);
 uint64_t esp_time_impl_get_boot_time(void);
+int64_t esp_system_get_time(void);
 int *__real___errno(void);
 
 #ifdef __GNUC__
@@ -1404,6 +1405,11 @@ bool sys_esp_timer_is_active(esp_timer_handle_t timer)
         return ESP_ERR_INVALID_ARG;
     }
     return esp_timer_is_active(timer);
+}
+
+static int64_t IRAM_ATTR sys_esp_system_get_time(void)
+{
+    return esp_system_get_time();
 }
 
 #ifdef __GNUC__
