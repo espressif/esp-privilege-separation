@@ -79,3 +79,13 @@ externalproject_add(user_app
 set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" APPEND PROPERTY
     ADDITIONAL_MAKE_CLEAN_FILES
     ${user_binary_files})
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/app_libs_and_objs.json
+    COMMAND ${python} ${esp_priv_access_dir}/utility/gen_lib_list.py --build=${CMAKE_BINARY_DIR} --app_name=${PROJECT_NAME}
+    DEPENDS user_app
+    COMMENT "Generating list of libraries and object files from firmware image"
+    VERBATIM
+    )
+add_custom_target(gen_lib_list_in_json_fmt DEPENDS ${CMAKE_BINARY_DIR}/app_libs_and_objs.json)
+add_dependencies(app gen_lib_list_in_json_fmt)
