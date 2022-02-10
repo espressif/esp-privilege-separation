@@ -1,11 +1,5 @@
-From 12ce90fd342a6d84c76f6f9b5f3b2f61c62672e4 Mon Sep 17 00:00:00 2001
-From: Sachin Parekh <sachin.parekh@espressif.com>
-Date: Wed, 12 Jan 2022 17:58:19 +0530
-Subject: [PATCH] Changes to achieve privilege separation
-
-
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
-index 296427721a7..2eb50dc94d9 100644
+index 296427721a..2eb50dc94d 100644
 --- a/components/esp32c3/Kconfig
 +++ b/components/esp32c3/Kconfig
 @@ -252,4 +252,10 @@ menu "ESP32C3-Specific"
@@ -20,7 +14,7 @@ index 296427721a7..2eb50dc94d9 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/hal/interrupt_controller_hal.c b/components/hal/interrupt_controller_hal.c
-index f7e815beffe..e50c0db74d9 100644
+index f7e815beff..e50c0db74d 100644
 --- a/components/hal/interrupt_controller_hal.c
 +++ b/components/hal/interrupt_controller_hal.c
 @@ -22,7 +22,7 @@ static bool is_interrupt_number_reserved(int interrupt_number)
@@ -33,7 +27,7 @@ index f7e815beffe..e50c0db74d9 100644
          return true;
      }
 diff --git a/components/heap/include/esp_heap_caps.h b/components/heap/include/esp_heap_caps.h
-index bed3d710bf0..b20441103aa 100644
+index bed3d710bf..b20441103a 100644
 --- a/components/heap/include/esp_heap_caps.h
 +++ b/components/heap/include/esp_heap_caps.h
 @@ -41,6 +41,8 @@ extern "C" {
@@ -46,7 +40,7 @@ index bed3d710bf0..b20441103aa 100644
  #define MALLOC_CAP_INVALID          (1<<31) ///< Memory can't be used / list end marker
  
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
-index 1006d5bea53..4fd9c47a255 100644
+index 1006d5bea5..4fd9c47a25 100644
 --- a/components/riscv/vectors.S
 +++ b/components/riscv/vectors.S
 @@ -16,9 +16,16 @@
@@ -248,7 +242,7 @@ index 1006d5bea53..4fd9c47a255 100644
  
 diff --git a/components/soc/esp32c3/include/soc/world_controller_reg.h b/components/soc/esp32c3/include/soc/world_controller_reg.h
 new file mode 100644
-index 00000000000..f4a6fe37247
+index 0000000000..f4a6fe3724
 --- /dev/null
 +++ b/components/soc/esp32c3/include/soc/world_controller_reg.h
 @@ -0,0 +1,50 @@
@@ -303,7 +297,7 @@ index 00000000000..f4a6fe37247
 +#define World_Controller_EDMA_SHA                               (CPU_PERI_WORLD_CONTROLLER + 0x91C)
 +#define World_Controller_EDMA_ADC_DAC                           (CPU_PERI_WORLD_CONTROLLER + 0x920)
 diff --git a/components/soc/esp32c3/soc_memory_layout.c b/components/soc/esp32c3/soc_memory_layout.c
-index ba0ae819cba..c4c73e9b5bb 100644
+index ba0ae819cb..c4c73e9b5b 100644
 --- a/components/soc/esp32c3/soc_memory_layout.c
 +++ b/components/soc/esp32c3/soc_memory_layout.c
 @@ -44,6 +44,10 @@ const soc_memory_type_desc_t soc_memory_types[] = {
@@ -318,7 +312,7 @@ index ba0ae819cba..c4c73e9b5bb 100644
  
  #ifdef CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
 diff --git a/tools/idf_monitor.py b/tools/idf_monitor.py
-index 490178e53a3..2ca18c7d04f 100755
+index 490178e53a..2ca18c7d04 100755
 --- a/tools/idf_monitor.py
 +++ b/tools/idf_monitor.py
 @@ -854,6 +854,11 @@ class Monitor(object):
@@ -341,6 +335,15 @@ index 490178e53a3..2ca18c7d04f 100755
                     '-ex', "target remote | \"{python}\" \"{script}\" --target {target} \"{output_file}\""
                     .format(python=sys.executable,
                             script=panic_output_decode_script,
--- 
-2.24.3 (Apple Git-128)
-
+diff --git a/tools/idf_py_actions/tools.py b/tools/idf_py_actions/tools.py
+index 688223ff3a..cd7abc2f03 100644
+--- a/tools/idf_py_actions/tools.py
++++ b/tools/idf_py_actions/tools.py
+@@ -199,6 +199,7 @@ def ensure_build_directory(args, prog_name, always_run_cmake=False):
+         try:
+             cmake_args = [
+                 'cmake',
++                '-Wno-dev',
+                 '-G',
+                 args.generator,
+                 '-DPYTHON_DEPS_CHECKED=1',
