@@ -28,7 +28,7 @@
 #define WS2812_GPIO     8
 #define BUTTON_IO       9
 #define INTR_LED        2
-#define BLINK_GPIO      4
+#define BLINK_GPIO      10
 
 static int g_state = 0;
 static usr_gpio_handle_t intr_gpio_handle;
