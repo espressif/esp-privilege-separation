@@ -58,6 +58,7 @@ static DRAM_ATTR QueueHandle_t usr_esp_timer_queue;
 
 void esp_time_impl_set_boot_time(uint64_t time_us);
 uint64_t esp_time_impl_get_boot_time(void);
+int *__real___errno(void);
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -177,25 +178,36 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     }
 
     TaskHandle_t handle;
-    StaticTask_t *xtaskTCB = heap_caps_malloc(sizeof(StaticTask_t), portTcbMemoryCaps);
+    StaticTask_t *xtaskTCB = NULL;
+    StackType_t *xtaskStack = NULL, *kernel_stack = NULL;
+    void *usr_errno = NULL;
+    int err = pdPASS;
+
+    xtaskTCB = heap_caps_malloc(sizeof(StaticTask_t), portTcbMemoryCaps);
     if (xtaskTCB == NULL) {
         ESP_LOGE(TAG, "Insufficient memory for TCB");
         return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     }
-    StackType_t *xtaskStack = heap_caps_malloc(usStackDepth, MALLOC_CAP_WORLD1);
+    xtaskStack = heap_caps_malloc(usStackDepth, MALLOC_CAP_WORLD1);
     if (xtaskStack == NULL) {
         ESP_LOGE(TAG, "Insufficient memory for user stack");
-        free(xtaskTCB);
-        return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+        err = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+        goto failure;
     }
-    StackType_t *kernel_stack = heap_caps_malloc(KERNEL_STACK_SIZE, portStackMemoryCaps);
+    kernel_stack = heap_caps_malloc(KERNEL_STACK_SIZE, portStackMemoryCaps);
     if (kernel_stack == NULL) {
         ESP_LOGE(TAG, "Insufficient memory for kernel stack");
-        free(xtaskTCB);
-        free(xtaskStack);
-        return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+        err = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+        goto failure;
     }
     memset(kernel_stack, tskSTACK_FILL_BYTE, KERNEL_STACK_SIZE * sizeof(StackType_t));
+
+    usr_errno = heap_caps_calloc(1, sizeof(int), MALLOC_CAP_WORLD1);
+    if (usr_errno == NULL) {
+        ESP_LOGE(TAG, "Insufficient memory for user errno");
+        err = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+        goto failure;
+    }
 
     /* Suspend the scheduler to ensure that it does not switch to the newly created task.
      * We need to first set the kernel stack as a TLS and only then it should be executed
@@ -203,22 +215,35 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     vTaskSuspendAll();
     handle = xTaskCreateStatic(pvTaskCode, pcName, usStackDepth, pvParameters, uxPriority, xtaskStack, xtaskTCB);
 
-    // The 1st (0th index) TLS pointer is used by WiFi
+    // The 1st (0th index) TLS pointer is used by pthread
     // 2nd TLS pointer is used to store the kernel stack, used when servicing system calls
     // 3rd TLS pointer is used to store the WORLD of the task. 0 = WORLD0 and 1 = WORLD1
-    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, 1, kernel_stack, NULL);
-    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, 2, (void *)1, NULL);
+    // 4th TLS pointer is used to store the errno variable
+    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_KERN_STACK, kernel_stack, NULL);
+    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_WORLD, (void *)1, NULL);
+    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
     xTaskResumeAll();
 
     if (pvCreatedTask) {
         *pvCreatedTask = handle;
     }
-    return pdPASS;
+    return err;
+failure:
+    if (xtaskTCB) {
+        free(xtaskTCB);
+    }
+    if (xtaskStack) {
+        free(xtaskStack);
+    }
+    if (kernel_stack) {
+        free(kernel_stack);
+    }
+    return err;
 }
 
 void vPortCleanUpTCB (void *pxTCB)
 {
-    if (pvTaskGetThreadLocalStoragePointer(pxTCB, 1) == NULL) {
+    if (pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_KERN_STACK) == NULL) {
         /* This means this task is a kernel task.
          * User task has a kernel stack at this index
          * Do nothing and return*/
@@ -228,7 +253,7 @@ void vPortCleanUpTCB (void *pxTCB)
     // Has to be some other way to free the allocated memory
     if (is_valid_user_d_addr(((StaticTask_t *)pxTCB)->pxDummy6)) {
         /* The stack is the user space stack. Free the kernel space stack */
-        void *k_stack = pvTaskGetThreadLocalStoragePointer(pxTCB, 1);
+        void *k_stack = pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_KERN_STACK);
         free(k_stack);
     } else {
         /* The task might be deleted when it is executing system-call, in that case, the stack point will point to kernel stack.
@@ -968,7 +993,18 @@ static u16_t sys_lwip_htons(u16_t n)
 
 static int *sys___errno(void)
 {
-    return __errno();
+    return pvTaskGetThreadLocalStoragePointer(NULL, ESP_PA_TLS_OFFSET_ERRNO);
+}
+
+/* __wrap___errno is called when errno is accessed in protected app */
+int *__wrap___errno(void)
+{
+    void *tls_errno = pvTaskGetThreadLocalStoragePointer(NULL, ESP_PA_TLS_OFFSET_ERRNO);
+    // If TLS pointer is set, it indicates a user task.
+    if (tls_errno) {
+        return tls_errno;
+    }
+    return __real___errno();
 }
 
 static int sys_open(const char *path, int flags, int mode)

@@ -282,6 +282,10 @@ esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
 IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t stack_sz)
 {
     TaskHandle_t handle;
+    StaticTask_t *xtaskTCB = NULL;
+    StackType_t *xtaskStack = NULL, *kernel_stack = NULL;
+    void *usr_errno = NULL;
+    esp_err_t err = ESP_OK;
 
     if (!is_valid_user_i_addr((void *)user_entry)) {
         ESP_LOGE(TAG, "Incorrect user entry");
@@ -289,27 +293,33 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
     }
 
     ESP_LOGI(TAG, "User entry point: %p", user_entry);
-    StaticTask_t *xtaskTCB = heap_caps_malloc(sizeof(StaticTask_t), portTcbMemoryCaps);
+    xtaskTCB = heap_caps_malloc(sizeof(StaticTask_t), portTcbMemoryCaps);
     if (xtaskTCB == NULL) {
         ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
         return ESP_ERR_NO_MEM;
     }
-    StackType_t *xtaskStack = heap_caps_malloc(stack_sz, MALLOC_CAP_WORLD1);
+    xtaskStack = heap_caps_malloc(stack_sz, MALLOC_CAP_WORLD1);
     if (xtaskStack == NULL) {
         ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
-        free(xtaskTCB);
-        return ESP_ERR_NO_MEM;
+        err = ESP_ERR_NO_MEM;
+        goto failure;
     }
 
-    StackType_t *kernel_stack = heap_caps_malloc(KERNEL_STACK_SIZE, portStackMemoryCaps);
+    kernel_stack = heap_caps_malloc(KERNEL_STACK_SIZE, portStackMemoryCaps);
     if (kernel_stack == NULL) {
         ESP_LOGE(TAG, "Failed to allocate kernel stack..Skipping");
-        free(xtaskTCB);
-        free(xtaskStack);
-        return ESP_ERR_NO_MEM;
+        err = ESP_ERR_NO_MEM;
+        goto failure;
     }
 
     memset(kernel_stack, tskSTACK_FILL_BYTE, KERNEL_STACK_SIZE * sizeof( StackType_t ) );
+
+    usr_errno = heap_caps_calloc(1, sizeof(int), MALLOC_CAP_WORLD1);
+    if (usr_errno == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate user errno..Skipping");
+        err = ESP_ERR_NO_MEM;
+        goto failure;
+    }
 
     /* Suspend the scheduler to ensure that it does not switch to the newly created task.
      * We need to first set the kernel stack as a TLS and only then it should be executed
@@ -317,10 +327,23 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
     vTaskSuspendAll();
     handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 0, xtaskStack, xtaskTCB);
 
-    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, 1, kernel_stack, NULL);
+    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_KERN_STACK, kernel_stack, NULL);
+    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
 
     xTaskResumeAll();
-    return ESP_OK;
+    return err;
+
+failure:
+    if (xtaskTCB) {
+        free(xtaskTCB);
+    }
+    if (xtaskStack) {
+        free(xtaskStack);
+    }
+    if (kernel_stack) {
+        free(kernel_stack);
+    }
+    return err;
 }
 
 esp_err_t esp_priv_access_user_set_entry(void *user_entry)
@@ -390,7 +413,7 @@ static void cleanup_user_tasks()
     uint32_t count = uxTaskGetSnapshotAll(snapshots, task_count, &tcb_size);
     for (int i = 0; i < count; i++) {
         handle = (TaskHandle_t)snapshots[i].pxTCB;
-        if (pvTaskGetThreadLocalStoragePointer(handle, 1) == NULL) {
+        if (pvTaskGetThreadLocalStoragePointer(handle, ESP_PA_TLS_OFFSET_KERN_STACK) == NULL) {
             // This indicates that its a protected space task.
             // Keep it as it is
             continue;

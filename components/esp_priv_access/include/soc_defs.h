@@ -37,6 +37,13 @@
 extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
 extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
 
+typedef enum {
+    ESP_PA_TLS_OFFSET_PTHREAD,
+    ESP_PA_TLS_OFFSET_KERN_STACK,
+    ESP_PA_TLS_OFFSET_WORLD,
+    ESP_PA_TLS_OFFSET_ERRNO,
+} esp_priv_access_tls_offset;
+
 typedef struct {
     uint32_t user_app_dram_start;
     uint32_t user_app_heap_start;

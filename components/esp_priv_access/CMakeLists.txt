@@ -62,6 +62,9 @@ else()
     add_custom_target(reserve_linker_script DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/reserve_out.ld)
     add_dependencies(${COMPONENT_LIB} reserve_linker_script)
 
+    # errno for user tasks is stored in TLS. --wrap __errno to use TLS errno if it is a user task.
+    target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=__errno")
+
     # Add user_app binary to the esptool flash arguments
     set(partition user_app)
     set(image_file ${PROJECT_DIR}/build/user_app/user_app.bin)
