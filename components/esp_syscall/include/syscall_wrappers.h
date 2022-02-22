@@ -38,18 +38,74 @@ typedef void (*usr_esp_event_handler_t)(void* event_handler_arg,
                                         int32_t event_id,
                                         void* event_data);
 
-int usr_printf(const char *fmt, ...);
-
+/**
+ * @brief Register user space event handler
+ *
+ * @param event_base Base ID of the event
+ * @param event_id ID of the event
+ * @param event_handler Handler function that gets called when the event occurs
+ * @param event_handler_arg Data passed to the handler
+ * @param context Event handler instance object that contains the context.
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - esp_err_t return code, otherwise
+ *
+ * @note
+ *     esp_event_base_t is a unique string pointer which resides in the component that exposes it,
+ *     it means it resides in the protected app and its value can only be determined after compiling
+ *     protected application. Extracting the pointer and passing it to user app becomes tricky so instead
+ *     of using the pointer, we have defined usr_esp_event_base_t which is an enum and the translation
+ *     from enum to its string pointer is handled in esp_syscalls.c which has knowledge of both, the pointer
+ *     and the enum
+ */
 esp_err_t usr_esp_event_handler_instance_register(usr_esp_event_base_t event_base,
                                               int32_t event_id,
                                               usr_esp_event_handler_t event_handler,
                                               void *event_handler_arg,
                                               usr_esp_event_handler_instance_t *context);
 
+/**
+ * @brief De-register user space event handler
+ *
+ * @param event_base Base ID of the event
+ * @param event_id ID of the event
+ * @param context Event handler instance object returned when registering the instance.
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - esp_err_t return code, otherwise
+ */
 esp_err_t usr_esp_event_handler_instance_unregister(usr_esp_event_base_t event_base,
                                                     int32_t event_id,
                                                     usr_esp_event_handler_instance_t context);
 
-esp_err_t usr_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle);
+/**
+ * @brief Register User space GPIO Soft-ISR handler
+ *
+ * @param gpio_num GPIO numnber to which this handler is attached
+ * @param softisr_handler User space soft-ISR handler which will be invoked when an interrupt occurs on the given GPIO
+ * @param args  User specified argument
+ * @param gpio_handle Handle attached to this soft-isr handler
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_FAIL otherwise
+ *
+ * @note
+ *      User code is never executed in ISR context so there can't be user registered ISR handlers,
+ *      we still have a provision that allows user code to register a soft-isr handler that works
+ *      like a callback and is executed in a task's context
+ */
+esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t softisr_handler, void *args, usr_gpio_handle_t *gpio_handle);
 
-esp_err_t usr_gpio_isr_handler_remove(usr_gpio_handle_t gpio_handle);
+/**
+ * @brief Remove User space GPIO Soft-ISR handler
+ *
+ * @param gpio_handle Handle for the previously added soft-isr handler
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_FAIL otherwise
+ */
+esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle);

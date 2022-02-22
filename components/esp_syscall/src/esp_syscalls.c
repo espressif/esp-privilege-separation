@@ -1096,7 +1096,7 @@ static esp_err_t sys_gpio_install_isr_service(int intr_alloc_flags)
     return gpio_install_isr_service(intr_alloc_flags);
 }
 
-static esp_err_t sys_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle, QueueHandle_t usr_queue)
+static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle, QueueHandle_t usr_queue)
 {
     esp_err_t ret;
     if (!(is_valid_user_d_addr(gpio_handle) && usr_queue)) {
@@ -1123,7 +1123,7 @@ static esp_err_t sys_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_ha
     return ret;
 }
 
-static esp_err_t sys_gpio_isr_handler_remove(usr_gpio_handle_t gpio_handle)
+static esp_err_t sys_gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
 {
     esp_err_t ret;
     usr_gpio_args_t *usr_context = (usr_gpio_args_t *)gpio_handle;

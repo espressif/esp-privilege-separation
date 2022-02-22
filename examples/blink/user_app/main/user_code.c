@@ -35,7 +35,11 @@ static usr_gpio_handle_t intr_gpio_handle;
 
 static const char *TAG = "user_main";
 
-UIRAM_ATTR void user_gpio_isr(void *arg)
+/* User space code is never executed in ISR context,
+ * so user registered "ISR" functions are actually executed
+ * from task's context, hence they are termed as softISRs
+ */
+UIRAM_ATTR void user_gpio_softisr(void *arg)
 {
     int gpio_num = (int)arg;
     if (g_state == 1) {
@@ -97,7 +101,7 @@ void user_main()
     gpio_config(&io_conf);
 
     gpio_install_isr_service(0);
-    usr_gpio_isr_handler_add(BUTTON_IO, user_gpio_isr, (void*)INTR_LED, &intr_gpio_handle);
+    gpio_softisr_handler_add(BUTTON_IO, user_gpio_softisr, (void*)INTR_LED, &intr_gpio_handle);
 
     if (xTaskCreate(blink_task, "Blink task", 4096, NULL, 1, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Task Creation failed");

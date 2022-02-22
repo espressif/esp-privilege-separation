@@ -751,7 +751,7 @@ UIRAM_ATTR static void usr_gpio_isr_task(void *arg)
     }
 }
 
-esp_err_t usr_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle)
+esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle)
 {
     esp_err_t ret;
     _gpio_handler_count++;
@@ -767,7 +767,7 @@ esp_err_t usr_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, 
         }
     }
 
-    ret = EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, usr_gpio_isr_queue, __NR_gpio_isr_handler_add);
+    ret = EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, usr_gpio_isr_queue, __NR_gpio_softisr_handler_add);
 
     if (ret != ESP_OK) {
         if (_gpio_handler_count == 1) {
@@ -779,14 +779,14 @@ esp_err_t usr_gpio_isr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, 
     return ret;
 }
 
-esp_err_t usr_gpio_isr_handler_remove(usr_gpio_handle_t gpio_handle)
+esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
 {
     _gpio_handler_count--;
     if (_gpio_handler_count == 0) {
         usr_vTaskDelete(usr_gpio_isr_task_handle);
         usr_vQueueDelete(usr_gpio_isr_queue);
     }
-    return EXECUTE_SYSCALL(gpio_handle, __NR_gpio_isr_handler_remove);
+    return EXECUTE_SYSCALL(gpio_handle, __NR_gpio_softisr_handler_remove);
 }
 
 esp_err_t usr_nvs_flash_init()

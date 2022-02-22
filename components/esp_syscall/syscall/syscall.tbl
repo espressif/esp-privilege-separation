@@ -154,8 +154,8 @@
 # GPIO specific
 1035  common  gpio_config                             sys_gpio_config
 1036  common  gpio_install_isr_service                sys_gpio_install_isr_service
-1037  custom  gpio_isr_handler_add                    sys_gpio_isr_handler_add
-1038  custom  gpio_isr_handler_remove                 sys_gpio_isr_handler_remove
+1037  custom  gpio_softisr_handler_add                sys_gpio_softisr_handler_add
+1038  custom  gpio_softisr_handler_remove             sys_gpio_softisr_handler_remove
 
 # Memory allocation
 1039  common  malloc                                  sys_malloc
