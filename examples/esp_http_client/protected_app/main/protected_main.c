@@ -35,7 +35,7 @@ IRAM_ATTR void user_app_exception_handler(void *arg)
 }
 
 
-IRAM_ATTR void app_main()
+void app_main()
 {
     esp_err_t ret;
 

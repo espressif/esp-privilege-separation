@@ -29,7 +29,7 @@
 
 #define TAG             "protected_app"
 
-IRAM_ATTR void app_main()
+void app_main()
 {
     esp_err_t ret;
 

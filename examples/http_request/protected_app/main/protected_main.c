@@ -34,7 +34,7 @@ IRAM_ATTR void user_app_exception_handler(void *arg)
     // Perform actions when user app exception happens
 }
 
-IRAM_ATTR void app_main()
+void app_main()
 {
     esp_err_t ret;
 
