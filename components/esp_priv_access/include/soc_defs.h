@@ -23,10 +23,7 @@
 #define SOC_UIROM_LOW    0x42400000
 #define SOC_UIROM_HIGH   0x42800000
 
-/* TLS system calls require larger kernel stack size.
- * If TLS not in use, this can be set to 2560
- */
-#define KERNEL_STACK_SIZE   3072
+#define KERNEL_STACK_SIZE   2560
 #define tskSTACK_FILL_BYTE  0xa5U
 
 #define UIRAM_ATTR __attribute__((section(".uiram")))
