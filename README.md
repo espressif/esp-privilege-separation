@@ -1,4 +1,4 @@
-# ESP Privilege Separation
+# ESP Privilege Separation (Beta)
 
 ESP Privilege Separation is an approach to separate out traditional **monolithic** RTOS firmware into 2 independent executables, `protected_app` and `user_app`, with different privilege levels and a clearly defined `system-call` interface between them. Protected app executes in higher privilege mode, with full access to entire system memory and all peripherals whereas user application has restricted memory and peripheral access (as defined and granted by protected app).
 
