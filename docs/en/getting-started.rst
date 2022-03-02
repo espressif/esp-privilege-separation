@@ -7,7 +7,7 @@ Privilege Separation framework.
 Directory structure
 -------------------
 
-A privilege separation project has a slightly different directory structure than a normal ESP-IDF application (refer to `ESP-IDF directory structure <https://docs.espressif.com/projects/esp-idf/en/release-v4.3/esp32c3/api-guides/build-system.html#example-project>`_).
+ESP Privilege Separation project has a slightly different directory structure than a normal ESP-IDF application (refer to `ESP-IDF directory structure <https://docs.espressif.com/projects/esp-idf/en/release-v4.3/esp32c3/api-guides/build-system.html#example-project>`_).
 
 An example project under privilege separation philosophy looks like this::
 
