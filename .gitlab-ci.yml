@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - docs
 
 variables:
   IDF_PATH: "$CI_PROJECT_DIR/esp-idf"
@@ -10,17 +11,17 @@ variables:
   MAKEFLAGS: "-j5 --no-keep-going"
 
 before_script:
-    - export PATH=${PATH}:/esppool
-    # add gitlab ssh key
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - echo -n $GITLAB_KEY > ~/.ssh/id_rsa_base64
-    - base64 --decode --ignore-garbage ~/.ssh/id_rsa_base64 > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - echo -e "Host gitlab.espressif.cn\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
+  - export PATH=${PATH}:/esppool
+  # add gitlab ssh key
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - echo -n $GITLAB_KEY > ~/.ssh/id_rsa_base64
+  - base64 --decode --ignore-garbage ~/.ssh/id_rsa_base64 > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  - echo -e "Host gitlab.espressif.cn\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
 
 after_script:
-    - esppool -r all
+  - esppool -r all
 
 .setup_idf: &setup_idf
   # Cloning esp-idf
@@ -92,19 +93,6 @@ build_tests:
     - mv ${CI_PIPELINE_ID}.tar.gz $CI_PROJECT_DIR/
     - popd
 
-build_docs:
-  stage: build
-  image: esp-idf-doc-env-v4.4-docs:priv-sep
-  tags:
-    - build
-
-  script:
-    - python --version
-    - python -m pip install -r docs/requirements.txt
-    - pushd docs
-    - build-docs -t esp32c3 -l en
-    - popd
-
 run_tests:
   stage: test
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
@@ -113,3 +101,46 @@ run_tests:
   script:
     - tar -xzf ${CI_PIPELINE_ID}.tar.gz
     - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip esp32c3 --build $CI_PROJECT_DIR/build
+
+build_docs:
+  stage: docs
+  image: $CI_DOCKER_REGISTRY/esp-idf-doc-env:v4.4-1-v4
+  tags:
+    - docs
+  artifacts:
+    when: always
+    paths:
+      - docs/_build/*/*/*.txt
+      - docs/_build/*/*/html/*
+    expire_in: 4 days
+  needs: []
+  before_script: []
+  after_script: []
+  script:
+    - python --version
+    - cd docs
+    - pip install -r requirements.txt
+    - build-docs -t esp32c3 -l en
+
+deploy_docs_preview:
+  stage: docs
+  image: $CI_DOCKER_REGISTRY/esp-idf-doc-env:v4.4-1-v4
+  tags:
+    - docs
+  needs: ["build_docs"]
+  before_script: []
+  after_script: []
+  script:
+    - source ${CI_PROJECT_DIR}/docs/utils.sh
+    - add_doc_server_ssh_keys $DOCS_DEPLOY_PRIVATEKEY $DOCS_DEPLOY_SERVER $DOCS_DEPLOY_SERVER_USER
+    - export GIT_VER=$(git describe --always)
+    - pip install -r ${CI_PROJECT_DIR}/docs/requirements.txt
+    - deploy-docs
+  variables:
+    TYPE: "preview"
+    DOCS_BUILD_DIR: "${CI_PROJECT_DIR}/docs/_build/"
+    DOCS_DEPLOY_PRIVATEKEY: "$DOCS_DEPLOY_KEY"
+    DOCS_DEPLOY_SERVER: "$DOCS_SERVER"
+    DOCS_DEPLOY_SERVER_USER: "$DOCS_SERVER_USER"
+    DOCS_DEPLOY_PATH: "$DOCS_PATH"
+    DOCS_DEPLOY_URL_BASE: "https://$DOCS_PREVIEW_SERVER_URL/docs/esp-privilege-separation"
