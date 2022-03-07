@@ -11,14 +11,16 @@ The firmware architecture comprises of 2 different executables:
 Protected
 ~~~~~~~~~~
 
-- Trusted application that requires complete system access and isolation from user applications.
+- Trusted application that has the complete system access and is isolated from user applications.
 - Consists of crucial ESP-IDF components like FreeRTOS, WiFi, Networking stack.
 - Exposes system calls to the user space which allows user application to delegate functions to protected space as it requires access to critical features (OS, networking).
+
 
 User
 ~~~~~
 
 - Consists of system call interface that can be used to request protected app to execute a service in protected space.
+  - A `vTaskDelay()` from the user-space will internally be redirected to `usr_vTaskDelay()` which actually executes the system call.
 - Untrusted application logic in order to safeguard from hampering the entire system.
 
 
