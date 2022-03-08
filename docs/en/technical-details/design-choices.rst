@@ -29,7 +29,7 @@ it can continue without losing any data/state.
    and therefore we use ``FreeRTOS's Task Local Storage(TLS)`` pointers
    in order to store the **kernel stack frame**, the **WORLD**, and the **errno** variable
    of the user code.
--  Rest of the data (registers, variables) are stored on the stack that
+-  Rest of the data (registers, variables) are stored on whichever stack
    is currently being used (protected or user).
 
 .. note::
@@ -39,7 +39,7 @@ it can continue without losing any data/state.
 User space interrupt/event handling
 -----------------------------------
 
-Interrupt handlers and event handlers registered by user application has to be
+Interrupt handlers and event handlers registered by user application have to be
 executed under user space. For this, we have employed a dispatching mechanism shown below:
 
 .. image:: ../../img/interrupt_handling.png

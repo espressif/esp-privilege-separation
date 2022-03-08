@@ -26,7 +26,7 @@ The entire firmware comprises of 2 different executables:
 #### User
 
 - Consists of system call interface that can be used to request protected app to execute a service in protected space.
-  - An `vTaskDelay()` from the user-space will internally be redirected to `usr_vTaskDelay()` which actually executes the system call.
+  - A `vTaskDelay()` from the user-space will internally be redirected to `usr_vTaskDelay()` which actually executes the system call.
 - Untrusted application logic in order to safeguard from hampering the entire system.
 
 ## Getting Started
@@ -35,3 +35,8 @@ To get started, please try out the [examples](examples). Each example has README
 
 #### Supported SoCs
 - ESP32-C3 based development board
+
+### Future Work
+
+The ESP Privilege Separation project is under active development. There are a wide range of problems that are unsolved yet, and are quite interesting to explore. We will be addressing these in the days to come. With this release, our goal is to enable a minimal set of functionality that can achieve the user-kernel privilege separation with minimal memory bloat for user applications, at the same time, maintaining simplicity and backward compatibility for the IDF APIs. If you have a specific requirement that you believe fits well in this framework, or if solving such problems excites you, we'd love to talk to you for collaboration.
+
