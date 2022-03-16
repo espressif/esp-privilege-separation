@@ -45,7 +45,7 @@ build_examples:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
-    - build
+    - build_esppool
 
   artifacts:
     paths:
@@ -76,7 +76,7 @@ build_tests:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
-    - build
+    - build_esppool
 
   artifacts:
     paths:
@@ -97,7 +97,7 @@ run_tests:
   stage: test
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
-    - test
+    - test_esppool
   script:
     - tar -xzf ${CI_PIPELINE_ID}.tar.gz
     - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip esp32c3 --build $CI_PROJECT_DIR/build
