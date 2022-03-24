@@ -138,7 +138,7 @@ typedef struct {
     usr_esp_event_base_t event_base;
     int32_t event_id;
     void *event_data;
-    usr_context_t *usr_context;
+    usr_context_t usr_context;
 } usr_event_args_t;
 
 typedef struct {
@@ -171,3 +171,22 @@ typedef struct {
 #endif // WITH_PROFILING
     LIST_ENTRY(esp_timer) list_entry;
 } usr_esp_timer_handle_t;
+
+typedef enum {
+    ESP_SYSCALL_EVENT_GPIO,
+    ESP_SYSCALL_EVENT_ESP_TIMER,
+    ESP_SYSCALL_EVENT_XTIMER,
+    ESP_SYSCALL_EVENT_ESP_EVENT,
+} usr_event_t;
+
+typedef union {
+    usr_gpio_args_t gpio_args;
+    esp_timer_create_args_t esp_timer_args;
+    usr_xtimer_context_t xtimer_args;
+    usr_event_args_t event_args;
+} usr_dispatch_data_t;
+
+typedef struct {
+    usr_event_t event;
+    usr_dispatch_data_t dispatch_data;
+} usr_dispatch_ctx_t;

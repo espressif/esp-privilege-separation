@@ -51,10 +51,7 @@
 
 typedef void (*syscall_t)(void);
 
-static DRAM_ATTR QueueHandle_t usr_gpio_isr_queue;
-static DRAM_ATTR QueueHandle_t usr_event_loop_queue;
-static DRAM_ATTR QueueHandle_t usr_xtimer_handler_queue;
-static DRAM_ATTR QueueHandle_t usr_esp_timer_queue;
+static DRAM_ATTR QueueHandle_t usr_dispatcher_queue;
 
 void esp_time_impl_set_boot_time(uint64_t time_us);
 uint64_t esp_time_impl_get_boot_time(void);
@@ -692,8 +689,12 @@ static BaseType_t sys_xQueueGiveFromISR(QueueHandle_t xQueue, BaseType_t * const
 static void sys_xtimer_cb(void *timer)
 {
     usr_xtimer_context_t* usr_context = (usr_xtimer_context_t*)pvTimerGetTimerID(timer);
+    usr_dispatch_ctx_t dispatch_ctx = {
+        .event = ESP_SYSCALL_EVENT_XTIMER,
+    };
+    memcpy(&dispatch_ctx.dispatch_data.xtimer_args, usr_context, sizeof(usr_xtimer_context_t));
 
-    if (xQueueSend(usr_xtimer_handler_queue, usr_context, portMAX_DELAY) != pdPASS) {
+    if (xQueueSend(usr_dispatcher_queue, &dispatch_ctx, portMAX_DELAY) != pdPASS) {
         return;
     }
 }
@@ -707,12 +708,12 @@ static TimerHandle_t sys_xTimerCreate(const char * const pcTimerName,
 {
     TimerHandle_t handle;
 
-    if (!(is_valid_user_d_addr(pxCallbackFunction) && usr_queue)) {
+    if (!(is_valid_user_i_addr(pxCallbackFunction) && usr_queue)) {
         ESP_LOGE(TAG, "Incorrect address space for callback function or user queue");
         return NULL;
     }
 
-    usr_xtimer_handler_queue = usr_queue;
+    usr_dispatcher_queue = usr_queue;
 
     usr_xtimer_context_t *usr_context = heap_caps_malloc(sizeof(usr_xtimer_context_t), MALLOC_CAP_WORLD1);
     if (!usr_context) {
@@ -1074,8 +1075,11 @@ static int sys_fcntl(int s, int cmd, int val)
 IRAM_ATTR static void sys_gpio_isr_handler(void *args)
 {
     int need_yield;
-    usr_gpio_args_t *usr_context = (usr_gpio_args_t *)args;
-    if (xQueueSendFromISR(usr_gpio_isr_queue, usr_context, &need_yield) != pdPASS) {
+    usr_dispatch_ctx_t dispatch_ctx = {
+        .event = ESP_SYSCALL_EVENT_GPIO,
+    };
+    memcpy(&dispatch_ctx.dispatch_data.gpio_args, args, sizeof(usr_gpio_args_t));
+    if (xQueueSendFromISR(usr_dispatcher_queue, &dispatch_ctx, &need_yield) != pdPASS) {
         return;
     }
     if (need_yield == pdTRUE) {
@@ -1105,7 +1109,7 @@ static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t is
         return ESP_ERR_INVALID_ARG;
     }
 
-    usr_gpio_isr_queue = usr_queue;
+    usr_dispatcher_queue = usr_queue;
 
     usr_gpio_args_t *usr_context = heap_caps_malloc(sizeof(usr_gpio_args_t), MALLOC_CAP_WORLD1);
     if (!usr_context) {
@@ -1162,21 +1166,23 @@ static esp_netif_t* sys_esp_netif_create_default_wifi_sta()
 static void sys_event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
-    usr_event_args_t usr_event;
+    usr_dispatch_ctx_t dispatch_ctx = {
+        .event = ESP_SYSCALL_EVENT_ESP_EVENT,
+    };
 
     if (event_base == WIFI_EVENT) {
-        usr_event.event_base = WIFI_EVENT_BASE;
+        dispatch_ctx.dispatch_data.event_args.event_base = WIFI_EVENT_BASE;
     } else if (event_base == IP_EVENT) {
-        usr_event.event_base = IP_EVENT_BASE;
+        dispatch_ctx.dispatch_data.event_args.event_base = IP_EVENT_BASE;
     } else {
-        usr_event.event_base = -1;
+        dispatch_ctx.dispatch_data.event_args.event_base = -1;
     }
 
-    usr_event.event_id = event_id;
-    usr_event.event_data = event_data;
-    usr_event.usr_context = (usr_context_t *)arg;
+    dispatch_ctx.dispatch_data.event_args.event_id = event_id;
+    dispatch_ctx.dispatch_data.event_args.event_data = event_data;
+    memcpy(&dispatch_ctx.dispatch_data.event_args.usr_context, arg, sizeof(usr_context_t));
 
-    if (xQueueSend(usr_event_loop_queue, &usr_event, portMAX_DELAY) == pdFALSE) {
+    if (xQueueSend(usr_dispatcher_queue, &dispatch_ctx, portMAX_DELAY) == pdFALSE) {
         printf("Error sending message on queue\n");
     }
     return;
@@ -1207,7 +1213,7 @@ static esp_err_t sys_esp_event_handler_instance_register(usr_esp_event_base_t ev
         return ESP_ERR_INVALID_ARG;
     }
 
-    usr_event_loop_queue = usr_queue;
+    usr_dispatcher_queue = usr_queue;
 
     usr_context_t *usr_context = heap_caps_malloc(sizeof(usr_context_t), MALLOC_CAP_WORLD1);
     if (!usr_context) {
@@ -1319,7 +1325,11 @@ static void *sys_realloc(void* ptr, size_t size)
 
 static void sys_esp_timer_dispatch_cb(void* arg)
 {
-    if (xQueueSend(usr_esp_timer_queue, arg, portMAX_DELAY) == pdFALSE) {
+    usr_dispatch_ctx_t dispatch_ctx = {
+        .event = ESP_SYSCALL_EVENT_ESP_TIMER,
+    };
+    memcpy(&dispatch_ctx.dispatch_data.esp_timer_args, arg, sizeof(esp_timer_create_args_t));
+    if (xQueueSend(usr_dispatcher_queue, &dispatch_ctx, portMAX_DELAY) == pdFALSE) {
         ESP_LOGE(TAG, "Error sending message on queue");
     }
 }
@@ -1343,7 +1353,7 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
         .name = create_args->name,
         .skip_unhandled_events = create_args->skip_unhandled_events,
     };
-    usr_esp_timer_queue = usr_queue;
+    usr_dispatcher_queue = usr_queue;
     esp_err_t err = esp_timer_create(&sys_create_args, out_handle);
     if (err != ESP_OK) {
         free(usr_args);
