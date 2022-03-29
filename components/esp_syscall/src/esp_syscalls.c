@@ -37,6 +37,10 @@
 
 #include "esp_rom_md5.h"
 
+#include <esp_image_format.h>
+#include <esp_spi_flash.h>
+#include <esp_partition.h>
+
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/ets_sys.h"
 #endif
@@ -52,6 +56,7 @@
 typedef void (*syscall_t)(void);
 
 static DRAM_ATTR QueueHandle_t usr_dispatcher_queue;
+static DRAM_ATTR QueueHandle_t usr_mem_cleanup_queue;
 
 void esp_time_impl_set_boot_time(uint64_t time_us);
 uint64_t esp_time_impl_get_boot_time(void);
@@ -165,10 +170,10 @@ static int is_valid_user_task(TaskHandle_t xTask)
 
 static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
                                    const char * const pcName,
-			                       const uint32_t usStackDepth,
                                    void * const pvParameters,
                                    UBaseType_t uxPriority,
-                                   TaskHandle_t * const pvCreatedTask)
+                                   const BaseType_t xCoreID,
+                                   usr_task_ctx_t *task_ctx)
 {
     if (!is_valid_user_i_addr(pvTaskCode)) {
         ESP_LOGE(TAG, "Incorrect address of user function");
@@ -178,7 +183,7 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     TaskHandle_t handle;
     StaticTask_t *xtaskTCB = NULL;
     StackType_t *xtaskStack = NULL, *kernel_stack = NULL;
-    void *usr_errno = NULL;
+    int *usr_errno = NULL;
     int err = pdPASS;
 
     xtaskTCB = heap_caps_malloc(sizeof(StaticTask_t), portTcbMemoryCaps);
@@ -186,12 +191,14 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
         ESP_LOGE(TAG, "Insufficient memory for TCB");
         return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     }
-    xtaskStack = heap_caps_malloc(usStackDepth, MALLOC_CAP_WORLD1);
-    if (xtaskStack == NULL) {
-        ESP_LOGE(TAG, "Insufficient memory for user stack");
-        err = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+
+    xtaskStack = (StackType_t *)task_ctx->stack;
+    if (!is_valid_udram_addr(xtaskStack)) {
+        ESP_LOGE(TAG, "Invalid memory for user stack");
+        err = pdFAIL;
         goto failure;
     }
+
     kernel_stack = heap_caps_malloc(KERNEL_STACK_SIZE, portStackMemoryCaps);
     if (kernel_stack == NULL) {
         ESP_LOGE(TAG, "Insufficient memory for kernel stack");
@@ -200,18 +207,20 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     }
     memset(kernel_stack, tskSTACK_FILL_BYTE, KERNEL_STACK_SIZE * sizeof(StackType_t));
 
-    usr_errno = heap_caps_calloc(1, sizeof(int), MALLOC_CAP_WORLD1);
-    if (usr_errno == NULL) {
-        ESP_LOGE(TAG, "Insufficient memory for user errno");
-        err = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+    usr_errno = task_ctx->task_errno;
+    if (!is_valid_udram_addr(usr_errno)) {
+        ESP_LOGE(TAG, "Invalid memory for user errno");
+        err = pdFAIL;
         goto failure;
     }
+
+    *usr_errno = 0;
 
     /* Suspend the scheduler to ensure that it does not switch to the newly created task.
      * We need to first set the kernel stack as a TLS and only then it should be executed
      */
     vTaskSuspendAll();
-    handle = xTaskCreateStatic(pvTaskCode, pcName, usStackDepth, pvParameters, uxPriority, xtaskStack, xtaskTCB);
+    handle = xTaskCreateStaticPinnedToCore(pvTaskCode, pcName, task_ctx->stack_size, pvParameters, uxPriority, xtaskStack, xtaskTCB, xCoreID);
 
     // The 1st (0th index) TLS pointer is used by pthread
     // 2nd TLS pointer is used to store the kernel stack, used when servicing system calls
@@ -222,16 +231,14 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
     xTaskResumeAll();
 
-    if (pvCreatedTask) {
-        *pvCreatedTask = handle;
+    if (is_valid_udram_addr(task_ctx->task_handle)) {
+        *(TaskHandle_t *)(task_ctx->task_handle) = handle;
     }
+
     return err;
 failure:
     if (xtaskTCB) {
         free(xtaskTCB);
-    }
-    if (xtaskStack) {
-        free(xtaskStack);
     }
     if (kernel_stack) {
         free(kernel_stack);
@@ -248,11 +255,14 @@ void vPortCleanUpTCB (void *pxTCB)
         return;
     }
 
-    // Has to be some other way to free the allocated memory
-    if (is_valid_user_d_addr(((StaticTask_t *)pxTCB)->pxDummy6)) {
+    void *usr_ptr;
+    void *curr_stack = pxTaskGetStackStart(pxTCB);
+
+    if (is_valid_udram_addr(curr_stack)) {
         /* The stack is the user space stack. Free the kernel space stack */
         void *k_stack = pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_KERN_STACK);
         free(k_stack);
+        usr_ptr = curr_stack;
     } else {
         /* The task might be deleted when it is executing system-call, in that case, the stack point will point to kernel stack.
          * Retrieve the user stack from system call stack frame
@@ -262,13 +272,23 @@ void vPortCleanUpTCB (void *pxTCB)
         free((void *)syscall_stack->user_stack);
 #elif CONFIG_IDF_TARGET_ARCH_RISCV
         RvEcallFrame *syscall_stack = (RvEcallFrame *)((uint32_t)pxTaskGetStackStart(pxTCB) + KERNEL_STACK_SIZE - RV_ESTK_FRMSZ);
-        free((void *)syscall_stack->stack);
+        usr_ptr = (void *)syscall_stack->stack;
+        free(curr_stack);
 #endif
     }
+
+    if (usr_mem_cleanup_queue) {
+        // Send user space stack
+        xQueueSend(usr_mem_cleanup_queue, &usr_ptr, 0);
+        // Send user space errno variable
+        usr_ptr = pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_ERRNO);
+        xQueueSend(usr_mem_cleanup_queue, &usr_ptr, 0);
+    }
+
     /* prvDeleteTCB accesses TCB members after this function returns so to avoid use-after-free case,
-     * change the ucStaticallyAllocated field such that prvDeleteTCB will free the stack and TCB
+     * change the ucStaticallyAllocated field such that prvDeleteTCB will free the TCB
      */
-    ((StaticTask_t *)pxTCB)->uxDummy20 = 0;
+    ((StaticTask_t *)pxTCB)->uxDummy20 = 1;
 }
 
 static void sys_vTaskDelete(TaskHandle_t TaskHandle)
@@ -515,24 +535,25 @@ static UBaseType_t sys_uxTaskGetNumberOfTasks(void)
 
 static QueueHandle_t sys_xQueueGenericCreate(uint32_t QueueLength, uint32_t ItemSize, uint8_t ucQueueType)
 {
-    QueueHandle_t q;
-    size_t queue_size = (size_t) (QueueLength * ItemSize);
-    StaticQueue_t *queue = heap_caps_malloc(sizeof(StaticQueue_t), MALLOC_CAP_DEFAULT);
-    if (queue == NULL) {
-        ESP_LOGE(TAG, "Insufficient memory for queue struct");
-        return NULL;
+    if (ucQueueType == queueQUEUE_TYPE_CLEANUP) {
+        if (usr_mem_cleanup_queue == NULL) {
+            usr_mem_cleanup_queue = xQueueGenericCreate(QueueLength, ItemSize, queueQUEUE_TYPE_BASE);
+        }
+        return usr_mem_cleanup_queue;
     }
-    uint8_t *queue_storage = heap_caps_malloc(queue_size, MALLOC_CAP_WORLD1);
-    q = xQueueGenericCreateStatic(QueueLength, ItemSize, queue_storage, queue, ucQueueType);
-    return q;
+
+    return xQueueGenericCreate(QueueLength, ItemSize, ucQueueType);
 }
 
 static void sys_vQueueDelete(QueueHandle_t xQueue)
 {
+    if (xQueue == usr_mem_cleanup_queue) {
+        ESP_LOGE(TAG, "User mem cleanup queue deletion forbidden");
+        return;
+    }
+
     if (is_valid_kernel_d_addr(xQueue)) {
         vQueueDelete(xQueue);
-        free(((StaticQueue_t *)xQueue)->pvDummy1[0]);
-        free(xQueue);
     }
 }
 
@@ -715,7 +736,7 @@ static TimerHandle_t sys_xTimerCreate(const char * const pcTimerName,
 
     usr_dispatcher_queue = usr_queue;
 
-    usr_xtimer_context_t *usr_context = heap_caps_malloc(sizeof(usr_xtimer_context_t), MALLOC_CAP_WORLD1);
+    usr_xtimer_context_t *usr_context = heap_caps_malloc(sizeof(usr_xtimer_context_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_context) {
         ESP_LOGE(TAG, "Insufficient memory for user context");
         return NULL;
@@ -846,8 +867,9 @@ static int sys_getaddrinfo(const char *nodename, const char *servname,
     struct addrinfo *tmp_res;
     ret = getaddrinfo(nodename, servname, hints, &tmp_res);
     if (ret == 0) {
-        struct addrinfo *usr_res = heap_caps_malloc(NETDB_ELEM_SIZE, MALLOC_CAP_WORLD1);
-        if (!usr_res) {
+        struct addrinfo *usr_res = *res;
+        if (!is_valid_udram_addr(usr_res) || !is_valid_udram_addr(usr_res + NETDB_ELEM_SIZE)) {
+            ESP_LOGE(TAG, "Invalid user addrinfo pointer");
             freeaddrinfo(tmp_res);
             return -1;
         }
@@ -862,17 +884,9 @@ static int sys_getaddrinfo(const char *nodename, const char *servname,
         // Correct the location of nodename wrt user pointer. Data is already copied above by memcpy
         usr_res->ai_canonname = ((char *)usr_res + sizeof(struct addrinfo) + sizeof(struct sockaddr_storage));
 
-        *res = usr_res;
         freeaddrinfo(tmp_res);
     }
     return ret;
-}
-
-static void sys_freeaddrinfo(struct addrinfo *ai)
-{
-    if(is_valid_user_d_addr((void *)ai)) {
-        free(ai);
-    }
 }
 
 static int sys_lwip_getpeername(int s, struct sockaddr *name, socklen_t *namelen)
@@ -1104,14 +1118,14 @@ static esp_err_t sys_gpio_install_isr_service(int intr_alloc_flags)
 static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle, QueueHandle_t usr_queue)
 {
     esp_err_t ret;
-    if (!(is_valid_user_d_addr(gpio_handle) && usr_queue)) {
+    if (!(is_valid_udram_addr(gpio_handle) && usr_queue)) {
         ESP_LOGE(TAG, "Incorrect address space for gpio handle or user queue");
         return ESP_ERR_INVALID_ARG;
     }
 
     usr_dispatcher_queue = usr_queue;
 
-    usr_gpio_args_t *usr_context = heap_caps_malloc(sizeof(usr_gpio_args_t), MALLOC_CAP_WORLD1);
+    usr_gpio_args_t *usr_context = heap_caps_malloc(sizeof(usr_gpio_args_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_context) {
         ESP_LOGE(TAG, "Insufficient memory for user context");
         return ESP_ERR_NO_MEM;
@@ -1208,14 +1222,14 @@ static esp_err_t sys_esp_event_handler_instance_register(usr_esp_event_base_t ev
             return ESP_ERR_INVALID_ARG;
     }
 
-    if (!(is_valid_user_d_addr(context) && usr_queue)) {
+    if (!(is_valid_udram_addr(context) && usr_queue)) {
         ESP_LOGE(TAG, "Incorrect address space for context or user_queue");
         return ESP_ERR_INVALID_ARG;
     }
 
     usr_dispatcher_queue = usr_queue;
 
-    usr_context_t *usr_context = heap_caps_malloc(sizeof(usr_context_t), MALLOC_CAP_WORLD1);
+    usr_context_t *usr_context = heap_caps_malloc(sizeof(usr_context_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_context) {
         ESP_LOGE(TAG, "Insufficient memory for user context");
         return ESP_ERR_NO_MEM;
@@ -1318,11 +1332,11 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
         esp_timer_handle_t* out_handle, QueueHandle_t usr_queue)
 {
     if (!is_valid_user_d_addr((void *)create_args) ||
-            !is_valid_user_d_addr(out_handle) ||
+            !is_valid_udram_addr(out_handle) ||
             !usr_queue) {
         return ESP_ERR_INVALID_ARG;
     }
-    esp_timer_create_args_t *usr_args = (esp_timer_create_args_t *)heap_caps_malloc(sizeof(esp_timer_create_args_t), MALLOC_CAP_WORLD1);
+    esp_timer_create_args_t *usr_args = (esp_timer_create_args_t *)heap_caps_malloc(sizeof(esp_timer_create_args_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_args) {
         return ESP_ERR_NO_MEM;
     }

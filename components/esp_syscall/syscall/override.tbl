@@ -6,3 +6,4 @@
 5   common  spi_flash_cache_enabled                 usr_spi_flash_cache_enabled
 6   common  vPortCPUInitializeMutex                 usr_vPortCPUInitializeMutex
 7   common  vPortCPUAcquireMutex                    usr_vPortCPUAcquireMutex
+8   common  lwip_freeaddrinfo                       usr_lwip_freeaddrinfo

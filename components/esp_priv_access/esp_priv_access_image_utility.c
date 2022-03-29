@@ -123,7 +123,7 @@ esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data)
     const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
     if (user_partition == NULL) {
         ESP_LOGW(TAG, "User code partition not found");
-        return ESP_FAIL;
+        return ESP_ERR_NOT_FOUND;
     } else {
         ESP_LOGD(TAG, "User code partition @ 0x%x (0x%x)", user_partition->address, user_partition->size);
 
@@ -157,4 +157,24 @@ esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data)
 
         return ESP_FAIL;
     }
+}
+
+esp_err_t esp_priv_access_load_user_app_desc(usr_custom_app_desc_t *app_desc)
+{
+    const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
+
+    if (user_partition == NULL) {
+        ESP_LOGE(TAG, "User code partition not found");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    uint32_t offset = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t);
+
+    esp_err_t ret = esp_partition_read(user_partition, offset, app_desc, sizeof(usr_custom_app_desc_t));
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error reading user partition");
+    }
+
+    return ret;
 }

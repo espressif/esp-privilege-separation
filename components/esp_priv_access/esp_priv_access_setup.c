@@ -54,6 +54,8 @@ extern int _iram_end;
 
 static esp_priv_access_intr_handler_t intr_func;
 
+static usr_custom_app_desc_t app_desc;
+
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_end, world1_dram);
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_iram_start, (int)&_reserve_w1_iram_end, world1_iram);
 
@@ -284,8 +286,9 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
     TaskHandle_t handle;
     StaticTask_t *xtaskTCB = NULL;
     StackType_t *xtaskStack = NULL, *kernel_stack = NULL;
-    void *usr_errno = NULL;
+    int *usr_errno = NULL;
     esp_err_t err = ESP_OK;
+    usr_resources_t *user_resources = app_desc.user_app_resources;
 
     if (!is_valid_user_i_addr((void *)user_entry)) {
         ESP_LOGE(TAG, "Incorrect user entry");
@@ -298,9 +301,9 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
         ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
         return ESP_ERR_NO_MEM;
     }
-    xtaskStack = heap_caps_malloc(stack_sz, MALLOC_CAP_WORLD1);
-    if (xtaskStack == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
+    xtaskStack = (StackType_t *)&user_resources->startup_stack;
+    if (!is_valid_udram_addr(xtaskStack)) {
+        ESP_LOGE(TAG, "Invalid user stack..Skipping");
         err = ESP_ERR_NO_MEM;
         goto failure;
     }
@@ -314,18 +317,20 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
 
     memset(kernel_stack, tskSTACK_FILL_BYTE, KERNEL_STACK_SIZE * sizeof( StackType_t ) );
 
-    usr_errno = heap_caps_calloc(1, sizeof(int), MALLOC_CAP_WORLD1);
-    if (usr_errno == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate user errno..Skipping");
+    usr_errno = (int *)&user_resources->startup_errno;
+    if (!is_valid_udram_addr(usr_errno)) {
+        ESP_LOGE(TAG, "Invalid user errno..Skipping");
         err = ESP_ERR_NO_MEM;
         goto failure;
     }
+
+    *usr_errno = 0;
 
     /* Suspend the scheduler to ensure that it does not switch to the newly created task.
      * We need to first set the kernel stack as a TLS and only then it should be executed
      */
     vTaskSuspendAll();
-    handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 0, xtaskStack, xtaskTCB);
+    handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 5, xtaskStack, xtaskTCB);
 
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_KERN_STACK, kernel_stack, NULL);
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
@@ -336,9 +341,6 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
 failure:
     if (xtaskTCB) {
         free(xtaskTCB);
-    }
-    if (xtaskStack) {
-        free(xtaskStack);
     }
     if (kernel_stack) {
         free(kernel_stack);
@@ -357,32 +359,6 @@ esp_err_t esp_priv_access_user_set_entry(void *user_entry)
     return ESP_OK;
 }
 
-static void register_heap()
-{
-    usr_custom_app_desc_t app_desc;
-    const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
-
-    if (user_partition == NULL) {
-        ESP_LOGE(TAG, "User code partition not found");
-        return;
-    }
-
-    uint32_t offset = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t);
-
-    esp_partition_read(user_partition, offset, &app_desc, sizeof(usr_custom_app_desc_t));
-
-    /* Sanity check. user_app_dram_start has to be equal to _reserve_w1_dram_start
-     * If otherwise, probably a case of stale build. assert !
-     */
-    assert(app_desc.user_app_dram_start == (int)&_reserve_w1_dram_start);
-
-    uint32_t w1_caps[] = {MALLOC_CAP_WORLD1, 0, 0};
-    uint32_t w1_heap_size = (int)&_reserve_w1_dram_end - app_desc.user_app_heap_start;
-    heap_caps_add_region_with_caps(w1_caps, app_desc.user_app_heap_start, (int)&_reserve_w1_dram_end);
-
-    ESP_LOGI(TAG, "heap: At %08X len %08X (%d KiB): W1DRAM", app_desc.user_app_heap_start, w1_heap_size, w1_heap_size / 1024);
-}
-
 IRAM_ATTR esp_err_t esp_priv_access_user_boot()
 {
     esp_image_metadata_t user_img_data = {0};
@@ -391,8 +367,12 @@ IRAM_ATTR esp_err_t esp_priv_access_user_boot()
         void *user_entry = (void *)user_img_data.image.entry_addr;
         ret = esp_priv_access_user_set_entry(user_entry);
         if (ret == ESP_OK) {
-            register_heap();
-            ret = esp_priv_access_user_spawn_task(user_entry, 4096);
+            esp_priv_access_load_user_app_desc(&app_desc);
+            /* Sanity check. user_app_dram_start has to be equal to _reserve_w1_dram_start
+             * If otherwise, probably a case of stale build. assert !
+             */
+            assert(app_desc.user_app_dram_start == (int)&_reserve_w1_dram_start);
+            ret = esp_priv_access_user_spawn_task(user_entry, CONFIG_PA_USER_MAIN_TASK_STACK_SIZE);
         }
     }
      return ret;

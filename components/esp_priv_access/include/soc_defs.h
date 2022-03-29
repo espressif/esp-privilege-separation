@@ -15,6 +15,7 @@
 #pragma once
 
 #include "soc/soc.h"
+#include "sdkconfig.h"
 
 /* WORLD1 range */
 #define SOC_UDROM_LOW    0x3C400000
@@ -23,11 +24,13 @@
 #define SOC_UIROM_LOW    0x42400000
 #define SOC_UIROM_HIGH   0x42800000
 
-#define KERNEL_STACK_SIZE   2560
+#define KERNEL_STACK_SIZE   CONFIG_PA_KERNEL_STACK_SIZE
 #define tskSTACK_FILL_BYTE  0xa5U
 
 #define UIRAM_ATTR __attribute__((section(".uiram")))
 #define UDRAM_ATTR __attribute__((section(".udram")))
+
+#define queueQUEUE_TYPE_CLEANUP         250
 
 #ifndef __ASSEMBLER__
 
@@ -42,8 +45,14 @@ typedef enum {
 } esp_priv_access_tls_offset;
 
 typedef struct {
+    uint8_t startup_stack[CONFIG_PA_USER_MAIN_TASK_STACK_SIZE];
+    uint32_t startup_errno;
+} __attribute__((packed)) usr_resources_t;
+
+typedef struct {
     uint32_t user_app_dram_start;
     uint32_t user_app_heap_start;
+    usr_resources_t *user_app_resources;
 } usr_custom_app_desc_t;
 
 static inline int is_valid_uiram_addr(void *ptr)

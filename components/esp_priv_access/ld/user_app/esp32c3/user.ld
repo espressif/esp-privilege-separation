@@ -72,6 +72,14 @@ SECTIONS
     _user_bss_end = ABSOLUTE(.);
     /* The heap starts right after end of this section */
     _user_heap_start = ABSOLUTE(.);
+    /* Protected app spawns the first user space task and it requires user space stack for that.
+     * We reserve the starting bytes which is used as a stack and errno variable
+     *
+     * _heap_start is used by the heap allocator to determine the start of the heap
+     */
+    KEEP (*(.startup_resources))
+
+    . = ALIGN (16);
     _heap_start = ABSOLUTE(.);
     _reserve_w1_dram_end = ORIGIN(dram_seg) + LENGTH(dram_seg);
   } > dram_seg

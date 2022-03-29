@@ -14,7 +14,10 @@
 
 #include "esp_log.h"
 #include <esp_image_format.h>
+#include "soc_defs.h"
 
 esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data);
+
+esp_err_t esp_priv_access_load_user_app_desc(usr_custom_app_desc_t *app_desc);
 
 void esp_priv_access_handle_crashed_task(void);

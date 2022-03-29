@@ -87,4 +87,19 @@ menu "Privilege separation"
         help
             Enable serial debug console.
 
+    config PA_KERNEL_STACK_SIZE
+        int "Kernel stack size"
+        range 2560 20480
+        default 2560
+        help
+            Set the kernel stack size.
+            Each user space task has its own kernel stack. Kernel stack is used while processing system calls.
+
+    config PA_USER_MAIN_TASK_STACK_SIZE
+        int "User main task stack size"
+        default 3584
+        help
+            Set the user main task stack size.
+            This is stack of the task that calls user_main().
+
 endmenu
