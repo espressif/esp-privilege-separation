@@ -34,18 +34,6 @@ static int protected_mem_dump_cli_handler(int argc, char *argv[])
     return 0;
 }
 
-static int user_mem_dump_cli_handler(int argc, char *argv[])
-{
-    printf("\tDescription\tInternal\n");
-    printf("Current Free Memory\t%d\n",
-           heap_caps_get_free_size(MALLOC_CAP_WORLD1));
-    printf("Largest Free Block\t%d\n",
-           heap_caps_get_largest_free_block(MALLOC_CAP_WORLD1));
-    printf("Min. Ever Free Size\t%d\n",
-           heap_caps_get_minimum_free_size(MALLOC_CAP_WORLD1));
-    return 0;
-}
-
 static int protected_task_dump_cli_handler(int argc, char *argv[])
 {
 #ifndef CONFIG_FREERTOS_USE_TRACE_FACILITY
@@ -126,11 +114,6 @@ static void default_commands(void)
             .command = "protected-mem-dump",
             .help = "Get the available memory for protected app.",
             .func = protected_mem_dump_cli_handler,
-        },
-        {
-            .command = "user-mem-dump",
-            .help = "Get the available memory for user app.",
-            .func = user_mem_dump_cli_handler,
         },
         {
             .command = "protected-task-dump",
