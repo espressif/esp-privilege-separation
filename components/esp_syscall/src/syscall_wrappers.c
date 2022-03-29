@@ -46,19 +46,13 @@ extern int _user_heap_start;
 extern int _user_data_start;
 extern void user_main(void);
 
-static QueueHandle_t usr_gpio_isr_queue;
-static QueueHandle_t usr_event_loop_queue;
-static QueueHandle_t usr_xtimer_handler_queue;
-static QueueHandle_t usr_esp_timer_handler_queue;
-static TaskHandle_t usr_event_loop_task_handle;
-static TaskHandle_t usr_gpio_isr_task_handle;
-static TaskHandle_t usr_xtimer_task_handle;
-static TaskHandle_t usr_esp_timer_task_handle;
+#define DISPATCHER_TASK_PRIO 22
+#define DISPATCHER_TASK_STACK_SIZE 1024
 
-static uint8_t _event_handler_count;
-static uint8_t _gpio_handler_count;
-static uint8_t _timer_count;
-static uint8_t _esp_timer_count;
+/* Queue to receive registered events from protected app */
+static QueueHandle_t usr_dispatcher_queue;
+/* Task to trigger event callbacks in user app */
+static TaskHandle_t usr_dispatcher_task_handle;
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -80,6 +74,8 @@ const __attribute__((section(".rodata_custom_desc"))) usr_custom_app_desc_t cust
     .user_app_dram_start = (int)&_user_data_start,
     .user_app_heap_start = (int)&_user_heap_start,
 };
+
+static void usr_dispatcher_task(void *arg);
 
 // ROM and Newlib
 int usr_putchar(int c)
@@ -457,50 +453,13 @@ BaseType_t usr_xQueueGiveFromISR(QueueHandle_t xQueue, BaseType_t * const pxHigh
     return EXECUTE_SYSCALL(xQueue, pxHigherPriorityTaskWoken, __NR_xQueueGiveFromISR);
 }
 
-// Software Timers
-static void usr_xtimer_task(void *arg)
-{
-    QueueHandle_t usr_queue = (QueueHandle_t)arg;
-    usr_xtimer_context_t usr_context;
-    while (1) {
-        usr_xQueueReceive(usr_queue, &usr_context, portMAX_DELAY);
-        if (is_valid_user_i_addr(usr_context.usr_cb)) {
-            (usr_context.usr_cb)(usr_context.timerhandle);
-        }
-    }
-}
-
 TimerHandle_t usr_xTimerCreate(const char * const pcTimerName,
                                 const TickType_t xTimerPeriodInTicks,
                                 const UBaseType_t uxAutoReload,
                                 void * const pvTimerID,
                                 TimerCallbackFunction_t pxCallbackFunction)
 {
-    TimerHandle_t handle;
-    _timer_count++;
-    if (_timer_count == 1) {
-        usr_xtimer_handler_queue = usr_xQueueGenericCreate(10, sizeof(usr_xtimer_context_t), queueQUEUE_TYPE_BASE);
-        if (!usr_xtimer_handler_queue) {
-            return NULL;
-        }
-        usr_xTaskCreatePinnedToCore(usr_xtimer_task, "User xTimer dispatcher", 1024, usr_xtimer_handler_queue, CONFIG_FREERTOS_TIMER_TASK_PRIORITY, &usr_xtimer_task_handle, 0);
-        if (!usr_xtimer_task_handle) {
-            usr_vQueueDelete(usr_xtimer_handler_queue);
-            return NULL;
-        }
-    }
-
-    handle = EXECUTE_SYSCALL(pcTimerName, xTimerPeriodInTicks, uxAutoReload, pvTimerID, pxCallbackFunction, usr_xtimer_handler_queue, __NR_xTimerCreate);
-
-    if (handle == NULL) {
-        if (_timer_count == 1) {
-            usr_vTaskDelete(usr_xtimer_task_handle);
-            usr_vQueueDelete(usr_xtimer_handler_queue);
-        }
-        _timer_count--;
-    }
-
-    return handle;
+    return EXECUTE_SYSCALL(pcTimerName, xTimerPeriodInTicks, uxAutoReload, pvTimerID, pxCallbackFunction, usr_dispatcher_queue, __NR_xTimerCreate);
 }
 
 BaseType_t usr_xTimerIsTimerActive(TimerHandle_t xTimer)
@@ -744,53 +703,56 @@ esp_err_t usr_gpio_install_isr_service(int intr_alloc_flags)
     return EXECUTE_SYSCALL(intr_alloc_flags, __NR_gpio_install_isr_service);
 }
 
-UIRAM_ATTR static void usr_gpio_isr_task(void *arg)
+UIRAM_ATTR static void usr_dispatcher_task(void *arg)
 {
     QueueHandle_t usr_queue = (QueueHandle_t)arg;
-    usr_gpio_args_t usr_context;
+    usr_dispatch_ctx_t dispatch_ctx;
     while (1) {
-        usr_xQueueReceive(usr_queue, &usr_context, portMAX_DELAY);
-        if (is_valid_user_i_addr(usr_context.usr_isr)) {
-            (usr_context.usr_isr)(usr_context.usr_args);
+        usr_xQueueReceive(usr_queue, &dispatch_ctx, portMAX_DELAY);
+        switch (dispatch_ctx.event) {
+            case ESP_SYSCALL_EVENT_GPIO: {
+                usr_gpio_args_t *usr_context = (usr_gpio_args_t *)&dispatch_ctx.dispatch_data.gpio_args;
+                if (is_valid_user_i_addr(usr_context->usr_isr)) {
+                    (usr_context->usr_isr)(usr_context->usr_args);
+                }
+                break;
+            }
+
+            case ESP_SYSCALL_EVENT_ESP_TIMER: {
+                esp_timer_create_args_t *usr_context = (esp_timer_create_args_t *)&dispatch_ctx.dispatch_data.esp_timer_args;
+                if (is_valid_user_i_addr(usr_context->callback)) {
+                    (usr_context->callback)(usr_context->arg);
+                }
+                break;
+            }
+            case ESP_SYSCALL_EVENT_XTIMER: {
+                usr_xtimer_context_t *usr_context = (usr_xtimer_context_t *)&dispatch_ctx.dispatch_data.xtimer_args;
+                if (is_valid_user_i_addr(usr_context->usr_cb)) {
+                    (usr_context->usr_cb)(usr_context->timerhandle);
+                }
+                break;
+            }
+            case ESP_SYSCALL_EVENT_ESP_EVENT: {
+                usr_event_args_t *event_args = (usr_event_args_t *)&dispatch_ctx.dispatch_data.event_args;
+                usr_esp_event_handler_t usr_event_handler = event_args->usr_context.usr_event_handler;
+                if (usr_event_handler) {
+                    (*usr_event_handler)(event_args->usr_context.usr_args, event_args->event_base, event_args->event_id, event_args->event_data);
+                }
+                break;
+            }
+            default:
+                break;
         }
     }
 }
 
 esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle)
 {
-    esp_err_t ret;
-    _gpio_handler_count++;
-    if (_gpio_handler_count == 1) {
-        usr_gpio_isr_queue = usr_xQueueGenericCreate(10, sizeof(usr_gpio_args_t), queueQUEUE_TYPE_BASE);
-        if (!usr_gpio_isr_queue) {
-            return ESP_FAIL;
-        }
-        usr_xTaskCreatePinnedToCore(usr_gpio_isr_task, "User GPIO ISR dispatcher", 1024, usr_gpio_isr_queue, 22, &usr_gpio_isr_task_handle, 0);
-        if (!usr_gpio_isr_task_handle) {
-            usr_vQueueDelete(usr_gpio_isr_queue);
-            return ESP_FAIL;
-        }
-    }
-
-    ret = EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, usr_gpio_isr_queue, __NR_gpio_softisr_handler_add);
-
-    if (ret != ESP_OK) {
-        if (_gpio_handler_count == 1) {
-            usr_vTaskDelete(usr_gpio_isr_task_handle);
-            usr_vQueueDelete(usr_gpio_isr_queue);
-        }
-        _gpio_handler_count--;
-    }
-    return ret;
+    return EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, usr_dispatcher_queue, __NR_gpio_softisr_handler_add);
 }
 
 esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
 {
-    _gpio_handler_count--;
-    if (_gpio_handler_count == 0) {
-        usr_vTaskDelete(usr_gpio_isr_task_handle);
-        usr_vQueueDelete(usr_gpio_isr_queue);
-    }
     return EXECUTE_SYSCALL(gpio_handle, __NR_gpio_softisr_handler_remove);
 }
 
@@ -814,62 +776,20 @@ esp_netif_t* usr_esp_netif_create_default_wifi_sta()
     return EXECUTE_SYSCALL(__NR_esp_netif_create_default_wifi_sta);
 }
 
-UIRAM_ATTR void usr_event_loop_task(void *arg)
-{
-    QueueHandle_t usr_queue = (QueueHandle_t)arg;
-    usr_event_args_t usr_event;
-    while(1) {
-        usr_xQueueReceive(usr_queue, &usr_event, portMAX_DELAY);
-        usr_esp_event_handler_t usr_event_handler = (usr_esp_event_handler_t)usr_event.usr_context->usr_event_handler;
-        if (usr_event_handler) {
-            (*usr_event_handler)(usr_event.usr_context->usr_args, usr_event.event_base, usr_event.event_id, usr_event.event_data);
-        }
-    }
-}
-
 esp_err_t usr_esp_event_handler_instance_register(usr_esp_event_base_t event_base,
                                               int32_t event_id,
                                               usr_esp_event_handler_t event_handler,
                                               void *event_handler_arg,
                                               usr_esp_event_handler_instance_t *context)
 {
-    esp_err_t ret;
-    _event_handler_count++;
-    if (_event_handler_count == 1) {
-        usr_event_loop_queue = usr_xQueueGenericCreate(10, sizeof(usr_event_args_t), queueQUEUE_TYPE_BASE);
-        if (!usr_event_loop_queue) {
-            return ESP_FAIL;
-        }
-        usr_xTaskCreatePinnedToCore(usr_event_loop_task, "User event loop task", 2048, usr_event_loop_queue, 21, &usr_event_loop_task_handle, 0);
-        if (!usr_event_loop_task_handle) {
-            usr_vQueueDelete(usr_event_loop_queue);
-            return ESP_FAIL;
-        }
-    }
-
-    ret = EXECUTE_SYSCALL(event_base, event_id, event_handler, event_handler_arg, context, usr_event_loop_queue,
+    return EXECUTE_SYSCALL(event_base, event_id, event_handler, event_handler_arg, context, usr_dispatcher_queue,
                           __NR_esp_event_handler_instance_register);
-
-    if (ret != ESP_OK) {
-        if (_event_handler_count == 1) {
-            usr_vTaskDelete(usr_event_loop_task_handle);
-            usr_vQueueDelete(usr_event_loop_queue);
-        }
-        _event_handler_count--;
-    }
-
-    return ret;
 }
 
 esp_err_t usr_esp_event_handler_instance_unregister(usr_esp_event_base_t event_base,
                                                 int32_t event_id,
                                                 usr_esp_event_handler_instance_t context)
 {
-    _event_handler_count--;
-    if (_event_handler_count == 0) {
-        usr_vTaskDelete(usr_event_loop_task_handle);
-        usr_vQueueDelete(usr_event_loop_queue);
-    }
     return EXECUTE_SYSCALL(event_base, event_id, context, __NR_esp_event_handler_instance_unregister);
 }
 
@@ -943,44 +863,10 @@ void usr_esp_fill_random(void *buf, size_t len)
     EXECUTE_SYSCALL(buf, len, __NR_esp_fill_random);
 }
 
-static void usr_esp_timer_task(void *arg)
-{
-    QueueHandle_t usr_queue = (QueueHandle_t)arg;
-    esp_timer_create_args_t usr_args;
-    while (1) {
-        usr_xQueueReceive(usr_queue, &usr_args, portMAX_DELAY);
-        if (is_valid_user_i_addr(usr_args.callback)) {
-            (usr_args.callback)(usr_args.arg);
-        }
-    }
-}
-
 esp_err_t usr_esp_timer_create(const esp_timer_create_args_t* create_args,
         esp_timer_handle_t* out_handle, QueueHandle_t usr_queue)
 {
-    _esp_timer_count++; 
-    if (_esp_timer_count == 1) {
-        usr_esp_timer_handler_queue = usr_xQueueGenericCreate(10, sizeof(esp_timer_create_args_t), queueQUEUE_TYPE_BASE);
-        if (!usr_esp_timer_handler_queue) {
-            return ESP_FAIL;
-        }
-        usr_xTaskCreatePinnedToCore(usr_esp_timer_task, "User ESP-Timer dispatcher", 1024, usr_esp_timer_handler_queue, ESP_TASK_TIMER_PRIO, &usr_esp_timer_task_handle, 0);
-        if (!usr_esp_timer_task_handle) {
-            usr_vQueueDelete(usr_esp_timer_handler_queue);
-            return ESP_FAIL;
-        }
-    }
-
-    esp_err_t err = EXECUTE_SYSCALL(create_args, out_handle, usr_esp_timer_handler_queue, __NR_esp_timer_create);
-
-    if (err != ESP_OK) {
-        if (_esp_timer_count == 1) {
-            usr_vTaskDelete(usr_esp_timer_task_handle);
-            usr_vQueueDelete(usr_esp_timer_handler_queue);
-        }
-        _esp_timer_count--;
-    }
-    return err;
+    return EXECUTE_SYSCALL(create_args, out_handle, usr_dispatcher_queue, __NR_esp_timer_create);
 }
 
 esp_err_t usr_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
@@ -1001,13 +887,6 @@ esp_err_t usr_esp_timer_stop(esp_timer_handle_t timer)
 esp_err_t usr_esp_timer_delete(esp_timer_handle_t timer)
 {
     esp_err_t err = EXECUTE_SYSCALL(timer, __NR_esp_timer_delete);
-    if (err == ESP_OK) {
-        if (_esp_timer_count == 1) {
-            usr_vTaskDelete(usr_esp_timer_task_handle);
-            usr_vQueueDelete(usr_esp_timer_handler_queue);
-        }
-        _esp_timer_count--;
-    }
     return err;
 }
 
@@ -1093,6 +972,17 @@ esp_err_t usr_clear_bss()
 void _user_main()
 {
     usr_clear_bss();
+    usr_dispatcher_queue = usr_xQueueGenericCreate(10, sizeof(usr_dispatch_ctx_t), queueQUEUE_TYPE_BASE);
+    if (!usr_dispatcher_queue) {
+        usr_printf("Failed to create dispatcher queue\n");
+        abort();
+    }
+    usr_xTaskCreatePinnedToCore(usr_dispatcher_task, "User event dispatcher", DISPATCHER_TASK_STACK_SIZE, usr_dispatcher_queue, DISPATCHER_TASK_PRIO, &usr_dispatcher_task_handle, 0);
+    if (!usr_dispatcher_task_handle) {
+        usr_printf("Failed to create dispatcher task");
+        usr_vQueueDelete(usr_dispatcher_queue);
+        abort();
+    }
     user_main();
     usr_vTaskDelete(NULL);
 }
