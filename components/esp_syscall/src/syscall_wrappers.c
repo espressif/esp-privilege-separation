@@ -29,10 +29,13 @@
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 
+#include "esp_heap_caps_init.h"
 #include "esp_rom_md5.h"
+#include "esp_log.h"
 
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/ets_sys.h"
+#include "esp32c3/rom/rom_layout.h"
 #endif
 
 #ifndef XTSTR
@@ -40,9 +43,12 @@
 #define XTSTR(x)	_XTSTR(x)
 #endif
 
+static const char *TAG = "syscall_wrapper";
+
 extern int _user_bss_start;
 extern int _user_bss_end;
 extern int _user_heap_start;
+extern int _heap_start;
 extern int _user_data_start;
 extern void user_main(void);
 
@@ -53,6 +59,8 @@ extern void user_main(void);
 static QueueHandle_t usr_dispatcher_queue;
 /* Task to trigger event callbacks in user app */
 static TaskHandle_t usr_dispatcher_task_handle;
+
+static bool _is_heap_initialized;
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -818,41 +826,6 @@ esp_err_t usr_esp_wifi_connect()
     return EXECUTE_SYSCALL(__NR_esp_wifi_connect);
 }
 
-void *usr_malloc(size_t size)
-{
-    return EXECUTE_SYSCALL(size, __NR_malloc);
-}
-
-void *usr_calloc(size_t nmemb, size_t size)
-{
-    return EXECUTE_SYSCALL(nmemb, size, __NR_calloc);
-}
-
-void usr_free(void *ptr)
-{
-    EXECUTE_SYSCALL(ptr, __NR_free);
-}
-
-void *usr_realloc(void* ptr, size_t size)
-{
-    return EXECUTE_SYSCALL(ptr, size, __NR_realloc);
-}
-
-void *usr_heap_caps_malloc( size_t size, uint32_t caps )
-{
-    return usr_malloc(size);
-}
-
-void *usr_heap_caps_calloc( size_t n, size_t size, uint32_t caps)
-{
-    return usr_calloc(n, size);
-}
-
-void usr_heap_caps_free(void *ptr)
-{
-    usr_free(ptr);
-}
-
 UIRAM_ATTR uint32_t usr_esp_random(void)
 {
     return EXECUTE_SYSCALL(__NR_esp_random);
@@ -920,6 +893,37 @@ UIRAM_ATTR bool usr_spi_flash_cache_enabled(void)
 #pragma GCC diagnostic pop
 #endif
 
+/* Define all memory regions as default DRAM memory region.
+ * Block 9 is defined as DRAM used for startup stack in IDF but in case of user app,
+ * we use pre-reserved memory as startup stack
+ */
+#define ROM_DRAM_RESERVE_START          0x3FCDF060
+
+const ets_rom_layout_t layout =  {.dram0_rtos_reserved_start = (void *)ROM_DRAM_RESERVE_START};
+
+const ets_rom_layout_t * const ets_rom_layout_p = &layout;
+
+const soc_memory_region_t soc_memory_regions[] = {
+    { 0x3FC80000, 0x20000, 0, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
+    { 0x3FCA0000, 0x20000, 0, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
+    { 0x3FCC0000, 0x20000, 0, 0x403C0000}, //Block 9,  can be used as trace memory
+#ifdef CONFIG_ESP_SYSTEM_ALLOW_RTC_FAST_MEM_AS_HEAP
+    { 0x50000000, 0x2000,  4, 0}, //Fast RTC memory
+#endif
+};
+
+const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
+
+void usr_vPortCPUInitializeMutex(portMUX_TYPE *mux)
+{
+    (void)mux;
+}
+
+void usr_vPortCPUAcquireMutex(portMUX_TYPE *mux)
+{
+    (void)mux;
+}
+
 int usr_vprintf(const char * fmt, va_list ap)
 {
     int ret;
@@ -933,29 +937,45 @@ int usr_vprintf(const char * fmt, va_list ap)
 
 int usr_printf(const char *fmt, ...)
 {
-    int ret;
+    int ret = 0;
     char *str_ptr = NULL;
     va_list ap = 0;
     va_start(ap, fmt);
-    ret = vasprintf(&str_ptr, fmt, ap);
-    assert(str_ptr != NULL);
+    if (_is_heap_initialized) {
+        ret = vasprintf(&str_ptr, fmt, ap);
+        assert(str_ptr != NULL);
+    } else {
+        char buff[256];
+        ret = vsnprintf(buff, sizeof(buff), fmt, ap);
+        str_ptr = buff;
+    }
     va_end(ap);
     ret = usr_write_log_line(str_ptr, ret);
-    free(str_ptr);
+    if (_is_heap_initialized) {
+        free(str_ptr);
+    }
     return ret;
 }
 
 int usr_ets_printf(const char *fmt, ...)
 {
-    int ret;
+    int ret = 0;
     char *str_ptr = NULL;
     va_list ap = 0;
     va_start(ap, fmt);
-    ret = vasprintf(&str_ptr, fmt, ap);
-    assert(str_ptr != NULL);
+    if (_is_heap_initialized) {
+        ret = vasprintf(&str_ptr, fmt, ap);
+        assert(str_ptr != NULL);
+    } else {
+        char buff[256];
+        ret = vsnprintf(buff, sizeof(buff), fmt, ap);
+        str_ptr = buff;
+    }
     va_end(ap);
     ret = usr_write_log_line_unlocked(str_ptr, ret);
-    free(str_ptr);
+    if (_is_heap_initialized) {
+        free(str_ptr);
+    }
     return ret;
 }
 
@@ -972,6 +992,8 @@ esp_err_t usr_clear_bss()
 void _user_main()
 {
     usr_clear_bss();
+    heap_caps_init();
+    _is_heap_initialized = 1;
     usr_dispatcher_queue = usr_xQueueGenericCreate(10, sizeof(usr_dispatch_ctx_t), queueQUEUE_TYPE_BASE);
     if (!usr_dispatcher_queue) {
         usr_printf("Failed to create dispatcher queue\n");

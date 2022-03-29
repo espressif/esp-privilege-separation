@@ -157,22 +157,16 @@
 1037  custom  gpio_softisr_handler_add                sys_gpio_softisr_handler_add
 1038  custom  gpio_softisr_handler_remove             sys_gpio_softisr_handler_remove
 
-# Memory allocation
-1039  common  malloc                                  sys_malloc
-1040  common  calloc                                  sys_calloc
-1041  common  free                                    sys_free
-1042  common  realloc                                 sys_realloc
-
-1043  common  esp_random                              sys_esp_random
-1044  common  esp_fill_random                         sys_esp_fill_random
+1039  common  esp_random                              sys_esp_random
+1040  common  esp_fill_random                         sys_esp_fill_random
 
 # ESP-Timer
-1045  common  esp_timer_create                        sys_esp_timer_create
-1046  common  esp_timer_start_once                    sys_esp_timer_start_once
-1047  common  esp_timer_start_periodic                sys_esp_timer_start_periodic
-1048  common  esp_timer_stop                          sys_esp_timer_stop
-1049  common  esp_timer_delete                        sys_esp_timer_delete
-1050  common  esp_timer_get_time                      sys_esp_timer_get_time
-1051  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
-1052  common  esp_timer_is_active                     sys_esp_timer_is_active
-1053  common  esp_system_get_time                     sys_esp_system_get_time
+1041  common  esp_timer_create                        sys_esp_timer_create
+1042  common  esp_timer_start_once                    sys_esp_timer_start_once
+1043  common  esp_timer_start_periodic                sys_esp_timer_start_periodic
+1044  common  esp_timer_stop                          sys_esp_timer_stop
+1045  common  esp_timer_delete                        sys_esp_timer_delete
+1046  common  esp_timer_get_time                      sys_esp_timer_get_time
+1047  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
+1048  common  esp_timer_is_active                     sys_esp_timer_is_active
+1049  common  esp_system_get_time                     sys_esp_system_get_time

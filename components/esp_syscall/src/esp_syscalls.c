@@ -1290,21 +1290,6 @@ static esp_err_t sys_esp_wifi_connect()
     return esp_wifi_connect();
 }
 
-static void *sys_malloc(size_t size)
-{
-    return heap_caps_malloc(size, MALLOC_CAP_WORLD1);
-}
-
-static void *sys_calloc(size_t nmemb, size_t size)
-{
-    return heap_caps_calloc(nmemb, size, MALLOC_CAP_WORLD1);
-}
-
-static void sys_free(void *ptr)
-{
-    free(ptr);
-}
-
 IRAM_ATTR static uint32_t sys_esp_random(void)
 {
     return esp_random();
@@ -1316,11 +1301,6 @@ static void sys_esp_fill_random(void *buf, size_t len)
         return;
     }
     esp_fill_random(buf, len);
-}
-
-static void *sys_realloc(void* ptr, size_t size)
-{
-    return heap_caps_realloc(ptr, size, MALLOC_CAP_WORLD1);
 }
 
 static void sys_esp_timer_dispatch_cb(void* arg)
