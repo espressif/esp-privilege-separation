@@ -31,6 +31,7 @@
 #define UDRAM_ATTR __attribute__((section(".udram")))
 
 #define queueQUEUE_TYPE_CLEANUP         250
+#define queueQUEUE_TYPE_DISPATCH        251
 
 #ifndef __ASSEMBLER__
 

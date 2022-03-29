@@ -55,7 +55,6 @@ extern void user_main(void);
 #define CLEANUP_TASK_STACK_SIZE     1024
 #define CLEANUP_TASK_PRIO           20
 #define DISPATCHER_TASK_PRIO 22
-#define DISPATCHER_TASK_STACK_SIZE 1024
 
 /* Queue to receive registered events from protected app */
 static QueueHandle_t usr_dispatcher_queue;
@@ -503,7 +502,7 @@ TimerHandle_t usr_xTimerCreate(const char * const pcTimerName,
                                 void * const pvTimerID,
                                 TimerCallbackFunction_t pxCallbackFunction)
 {
-    return EXECUTE_SYSCALL(pcTimerName, xTimerPeriodInTicks, uxAutoReload, pvTimerID, pxCallbackFunction, usr_dispatcher_queue, __NR_xTimerCreate);
+    return EXECUTE_SYSCALL(pcTimerName, xTimerPeriodInTicks, uxAutoReload, pvTimerID, pxCallbackFunction, __NR_xTimerCreate);
 }
 
 BaseType_t usr_xTimerIsTimerActive(TimerHandle_t xTimer)
@@ -798,7 +797,7 @@ UIRAM_ATTR static void usr_dispatcher_task(void *arg)
 
 esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle)
 {
-    return EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, usr_dispatcher_queue, __NR_gpio_softisr_handler_add);
+    return EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, __NR_gpio_softisr_handler_add);
 }
 
 esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
@@ -832,7 +831,7 @@ esp_err_t usr_esp_event_handler_instance_register(usr_esp_event_base_t event_bas
                                               void *event_handler_arg,
                                               usr_esp_event_handler_instance_t *context)
 {
-    return EXECUTE_SYSCALL(event_base, event_id, event_handler, event_handler_arg, context, usr_dispatcher_queue,
+    return EXECUTE_SYSCALL(event_base, event_id, event_handler, event_handler_arg, context,
                           __NR_esp_event_handler_instance_register);
 }
 
@@ -878,10 +877,9 @@ void usr_esp_fill_random(void *buf, size_t len)
     EXECUTE_SYSCALL(buf, len, __NR_esp_fill_random);
 }
 
-esp_err_t usr_esp_timer_create(const esp_timer_create_args_t* create_args,
-        esp_timer_handle_t* out_handle, QueueHandle_t usr_queue)
+esp_err_t usr_esp_timer_create(const esp_timer_create_args_t* create_args, esp_timer_handle_t* out_handle)
 {
-    return EXECUTE_SYSCALL(create_args, out_handle, usr_dispatcher_queue, __NR_esp_timer_create);
+    return EXECUTE_SYSCALL(create_args, out_handle, __NR_esp_timer_create);
 }
 
 esp_err_t usr_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
@@ -1078,23 +1076,27 @@ static void user_cleanup_service_init()
     }
 }
 
+static void user_dispatch_service_init()
+{
+    usr_dispatcher_queue = usr_xQueueGenericCreate(20, sizeof(usr_dispatch_ctx_t), queueQUEUE_TYPE_DISPATCH);
+    if (!usr_dispatcher_queue) {
+        ESP_LOGE(TAG, "Failed to create dispatcher queue\nAborting...");
+        abort();
+    }
+    usr_xTaskCreatePinnedToCore(usr_dispatcher_task, "User event dispatcher", CONFIG_PA_USER_DISPATCHER_TASK_STACK_SIZE, usr_dispatcher_queue, DISPATCHER_TASK_PRIO, &usr_dispatcher_task_handle, 0);
+    if (!usr_dispatcher_task_handle) {
+        ESP_LOGE(TAG, "Failed to create dispatcher task\nAborting...");
+        abort();
+    }
+}
+
 void _user_main()
 {
     usr_clear_bss();
     heap_caps_init();
     _is_heap_initialized = 1;
     user_cleanup_service_init();
-    usr_dispatcher_queue = usr_xQueueGenericCreate(10, sizeof(usr_dispatch_ctx_t), queueQUEUE_TYPE_BASE);
-    if (!usr_dispatcher_queue) {
-        usr_printf("Failed to create dispatcher queue\n");
-        abort();
-    }
-    usr_xTaskCreatePinnedToCore(usr_dispatcher_task, "User event dispatcher", DISPATCHER_TASK_STACK_SIZE, usr_dispatcher_queue, DISPATCHER_TASK_PRIO, &usr_dispatcher_task_handle, 0);
-    if (!usr_dispatcher_task_handle) {
-        usr_printf("Failed to create dispatcher task");
-        usr_vQueueDelete(usr_dispatcher_queue);
-        abort();
-    }
+    user_dispatch_service_init();
     user_main();
     usr_vTaskDelete(NULL);
 }

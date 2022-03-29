@@ -542,6 +542,13 @@ static QueueHandle_t sys_xQueueGenericCreate(uint32_t QueueLength, uint32_t Item
         return usr_mem_cleanup_queue;
     }
 
+    if (ucQueueType == queueQUEUE_TYPE_DISPATCH) {
+        if (usr_dispatcher_queue == NULL) {
+            usr_dispatcher_queue = xQueueGenericCreate(QueueLength, ItemSize, queueQUEUE_TYPE_BASE);
+        }
+        return usr_dispatcher_queue;
+    }
+
     return xQueueGenericCreate(QueueLength, ItemSize, ucQueueType);
 }
 
@@ -549,6 +556,11 @@ static void sys_vQueueDelete(QueueHandle_t xQueue)
 {
     if (xQueue == usr_mem_cleanup_queue) {
         ESP_LOGE(TAG, "User mem cleanup queue deletion forbidden");
+        return;
+    }
+
+    if (xQueue == usr_dispatcher_queue) {
+        ESP_LOGE(TAG, "User dispatcher queue deletion forbidden");
         return;
     }
 
@@ -709,6 +721,10 @@ static BaseType_t sys_xQueueGiveFromISR(QueueHandle_t xQueue, BaseType_t * const
 
 static void sys_xtimer_cb(void *timer)
 {
+    if (usr_dispatcher_queue == NULL) {
+        return;
+    }
+
     usr_xtimer_context_t* usr_context = (usr_xtimer_context_t*)pvTimerGetTimerID(timer);
     usr_dispatch_ctx_t dispatch_ctx = {
         .event = ESP_SYSCALL_EVENT_XTIMER,
@@ -724,17 +740,14 @@ static TimerHandle_t sys_xTimerCreate(const char * const pcTimerName,
                                       const TickType_t xTimerPeriodInTicks,
                                       const UBaseType_t uxAutoReload,
                                       void * const pvTimerID,
-                                      TimerCallbackFunction_t pxCallbackFunction,
-                                      QueueHandle_t usr_queue)
+                                      TimerCallbackFunction_t pxCallbackFunction)
 {
     TimerHandle_t handle;
 
-    if (!(is_valid_user_i_addr(pxCallbackFunction) && usr_queue)) {
+    if (!(is_valid_user_i_addr(pxCallbackFunction))) {
         ESP_LOGE(TAG, "Incorrect address space for callback function or user queue");
         return NULL;
     }
-
-    usr_dispatcher_queue = usr_queue;
 
     usr_xtimer_context_t *usr_context = heap_caps_malloc(sizeof(usr_xtimer_context_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_context) {
@@ -1088,6 +1101,10 @@ static int sys_fcntl(int s, int cmd, int val)
 
 IRAM_ATTR static void sys_gpio_isr_handler(void *args)
 {
+    if (usr_dispatcher_queue == NULL) {
+        return;
+    }
+
     int need_yield;
     usr_dispatch_ctx_t dispatch_ctx = {
         .event = ESP_SYSCALL_EVENT_GPIO,
@@ -1115,15 +1132,13 @@ static esp_err_t sys_gpio_install_isr_service(int intr_alloc_flags)
     return gpio_install_isr_service(intr_alloc_flags);
 }
 
-static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle, QueueHandle_t usr_queue)
+static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle)
 {
     esp_err_t ret;
-    if (!(is_valid_udram_addr(gpio_handle) && usr_queue)) {
+    if (!(is_valid_udram_addr(gpio_handle))) {
         ESP_LOGE(TAG, "Incorrect address space for gpio handle or user queue");
         return ESP_ERR_INVALID_ARG;
     }
-
-    usr_dispatcher_queue = usr_queue;
 
     usr_gpio_args_t *usr_context = heap_caps_malloc(sizeof(usr_gpio_args_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_context) {
@@ -1180,6 +1195,10 @@ static esp_netif_t* sys_esp_netif_create_default_wifi_sta()
 static void sys_event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
+    if (usr_dispatcher_queue == NULL) {
+        return;
+    }
+
     usr_dispatch_ctx_t dispatch_ctx = {
         .event = ESP_SYSCALL_EVENT_ESP_EVENT,
     };
@@ -1206,8 +1225,7 @@ static esp_err_t sys_esp_event_handler_instance_register(usr_esp_event_base_t ev
                                               int32_t event_id,
                                               esp_event_handler_t event_handler,
                                               void *event_handler_arg,
-                                              usr_esp_event_handler_instance_t *context,
-                                              QueueHandle_t usr_queue)
+                                              usr_esp_event_handler_instance_t *context)
 {
     esp_err_t ret;
     esp_event_base_t sys_event_base;
@@ -1222,12 +1240,10 @@ static esp_err_t sys_esp_event_handler_instance_register(usr_esp_event_base_t ev
             return ESP_ERR_INVALID_ARG;
     }
 
-    if (!(is_valid_udram_addr(context) && usr_queue)) {
+    if (!(is_valid_udram_addr(context))) {
         ESP_LOGE(TAG, "Incorrect address space for context or user_queue");
         return ESP_ERR_INVALID_ARG;
     }
-
-    usr_dispatcher_queue = usr_queue;
 
     usr_context_t *usr_context = heap_caps_malloc(sizeof(usr_context_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_context) {
@@ -1319,6 +1335,10 @@ static void sys_esp_fill_random(void *buf, size_t len)
 
 static void sys_esp_timer_dispatch_cb(void* arg)
 {
+    if (usr_dispatcher_queue == NULL) {
+        return;
+    }
+
     usr_dispatch_ctx_t dispatch_ctx = {
         .event = ESP_SYSCALL_EVENT_ESP_TIMER,
     };
@@ -1329,11 +1349,10 @@ static void sys_esp_timer_dispatch_cb(void* arg)
 }
 
 esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
-        esp_timer_handle_t* out_handle, QueueHandle_t usr_queue)
+        esp_timer_handle_t* out_handle)
 {
     if (!is_valid_user_d_addr((void *)create_args) ||
-            !is_valid_udram_addr(out_handle) ||
-            !usr_queue) {
+            !is_valid_udram_addr(out_handle)) {
         return ESP_ERR_INVALID_ARG;
     }
     esp_timer_create_args_t *usr_args = (esp_timer_create_args_t *)heap_caps_malloc(sizeof(esp_timer_create_args_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
@@ -1347,7 +1366,6 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
         .name = create_args->name,
         .skip_unhandled_events = create_args->skip_unhandled_events,
     };
-    usr_dispatcher_queue = usr_queue;
     esp_err_t err = esp_timer_create(&sys_create_args, out_handle);
     if (err != ESP_OK) {
         free(usr_args);

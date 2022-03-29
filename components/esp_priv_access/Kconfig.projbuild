@@ -102,4 +102,11 @@ menu "Privilege separation"
             Set the user main task stack size.
             This is stack of the task that calls user_main().
 
+    config PA_USER_DISPATCHER_TASK_STACK_SIZE
+        int "User dispatcher task stack size"
+        default 2048
+        help
+            Set the user dispatcher task stack size.
+            All the user registered ISRs and event handlers will be executed from this task's context
+
 endmenu
