@@ -106,7 +106,7 @@ static uint32_t sys_ets_get_cpu_frequency(void)
 
 static void sys_esp_rom_md5_init(md5_context_t *context)
 {
-    if (!is_valid_user_d_addr((void *)context)) {
+    if (!is_valid_udram_addr((void *)context)) {
         return;
     }
     esp_rom_md5_init(context);
@@ -114,7 +114,7 @@ static void sys_esp_rom_md5_init(md5_context_t *context)
 
 static void sys_esp_rom_md5_update(md5_context_t *context, const void *buf, uint32_t len)
 {
-    if (!is_valid_user_d_addr((void *)context) ||
+    if (!is_valid_udram_addr((void *)context) ||
         !is_valid_user_d_addr((void *)buf)) {
         return;
     }
@@ -123,8 +123,8 @@ static void sys_esp_rom_md5_update(md5_context_t *context, const void *buf, uint
 
 static void sys_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
 {
-    if (!is_valid_user_d_addr((void *)digest) ||
-        !is_valid_user_d_addr((void *)context)) {
+    if (!is_valid_udram_addr((void *)digest) ||
+        !is_valid_udram_addr((void *)context)) {
         return;
     }
     esp_rom_md5_final(digest, context);
@@ -132,7 +132,7 @@ static void sys_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
 
 IRAM_ATTR static void sys__lock_acquire(_lock_t *lock)
 {
-    if (!is_valid_user_d_addr(lock)) {
+    if (!is_valid_udram_addr(lock)) {
         return;
     }
     _lock_acquire(lock);
@@ -140,7 +140,7 @@ IRAM_ATTR static void sys__lock_acquire(_lock_t *lock)
 
 IRAM_ATTR static void sys__lock_release(_lock_t *lock)
 {
-    if (!is_valid_user_d_addr(lock)) {
+    if (!is_valid_udram_addr(lock)) {
         return;
     }
     _lock_release(lock);
@@ -564,7 +564,7 @@ static void sys_vQueueDelete(QueueHandle_t xQueue)
         return;
     }
 
-    if (is_valid_kernel_d_addr(xQueue)) {
+    if (is_valid_kdram_addr(xQueue)) {
         vQueueDelete(xQueue);
     }
 }
@@ -573,7 +573,7 @@ static BaseType_t sys_xQueueGenericSend(QueueHandle_t xQueue, const void * const
 {
     // Incase of Semaphore, pvItemToQueue is NULL. Add an extra check for uxItemSize, which for Semaphore is 0
     // If the uxItemSize if 0, we can allow invalid pvItemToQueue pointer
-    if (is_valid_kernel_d_addr(xQueue) &&
+    if (is_valid_kdram_addr(xQueue) &&
         (is_valid_user_d_addr((void *)pvItemToQueue) || ((StaticQueue_t *)xQueue)->uxDummy4[2] == 0)) {
         return xQueueGenericSend(xQueue, pvItemToQueue, xTicksToWait, xCopyPosition);
     } else {
@@ -583,7 +583,7 @@ static BaseType_t sys_xQueueGenericSend(QueueHandle_t xQueue, const void * const
 
 static BaseType_t sys_xQueueGenericSendFromISR(QueueHandle_t xQueue, const void * const pvItemToQueue, BaseType_t * const pxHigherPriorityTaskWoken, const BaseType_t xCopyPosition)
 {
-    if (is_valid_kernel_d_addr(xQueue) && is_valid_user_d_addr((void *)pvItemToQueue)) {
+    if (is_valid_kdram_addr(xQueue) && is_valid_user_d_addr((void *)pvItemToQueue)) {
         return xQueueGenericSendFromISR(xQueue, pvItemToQueue, pxHigherPriorityTaskWoken, xCopyPosition);
     } else {
         return 0;
@@ -592,7 +592,7 @@ static BaseType_t sys_xQueueGenericSendFromISR(QueueHandle_t xQueue, const void 
 
 static int sys_xQueueReceive(QueueHandle_t xQueue, void * const buffer, TickType_t TickstoWait)
 {
-    if (is_valid_kernel_d_addr(xQueue) && is_valid_user_d_addr(buffer)) {
+    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr(buffer)) {
         return xQueueReceive(xQueue, buffer, TickstoWait);
     }
     return -1;
@@ -600,7 +600,7 @@ static int sys_xQueueReceive(QueueHandle_t xQueue, void * const buffer, TickType
 
 static BaseType_t sys_xQueueReceiveFromISR(QueueHandle_t xQueue, void * const pvBuffer, BaseType_t * const pxHigherPriorityTaskWoken)
 {
-    if (is_valid_kernel_d_addr(xQueue) && is_valid_user_d_addr((void *)pvBuffer)) {
+    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr((void *)pvBuffer)) {
         return xQueueReceiveFromISR(xQueue, pvBuffer, pxHigherPriorityTaskWoken);
     } else {
         return 0;
@@ -629,7 +629,7 @@ static BaseType_t sys_xQueueGenericReset(QueueHandle_t xQueue, BaseType_t xNewQu
 
 static BaseType_t sys_xQueuePeek(QueueHandle_t xQueue, void * const pvBuffer, TickType_t xTicksToWait)
 {
-    if (is_valid_kernel_d_addr(xQueue) && is_valid_user_d_addr((void *)pvBuffer)) {
+    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr((void *)pvBuffer)) {
         return xQueuePeek(xQueue, pvBuffer, xTicksToWait);
     } else {
         return 0;
@@ -638,7 +638,7 @@ static BaseType_t sys_xQueuePeek(QueueHandle_t xQueue, void * const pvBuffer, Ti
 
 static BaseType_t sys_xQueuePeekFromISR(QueueHandle_t xQueue,  void * const pvBuffer)
 {
-    if (is_valid_kernel_d_addr(xQueue) && is_valid_user_d_addr((void *)pvBuffer)) {
+    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr((void *)pvBuffer)) {
         return xQueuePeekFromISR(xQueue, pvBuffer);
     } else {
         return 0;
@@ -854,7 +854,7 @@ static int sys_lwip_connect(int s, const struct sockaddr *name, socklen_t namele
 
 static int sys_lwip_accept(int s, struct sockaddr *addr, socklen_t *addrlen)
 {
-    if (!is_valid_user_d_addr(addr) || !is_valid_user_d_addr(addrlen)) {
+    if (!is_valid_udram_addr(addr) || !is_valid_udram_addr(addrlen)) {
         return -1;
     }
     return lwip_accept(s, addr, addrlen);
@@ -862,7 +862,7 @@ static int sys_lwip_accept(int s, struct sockaddr *addr, socklen_t *addrlen)
 
 static int sys_lwip_bind(int s, const struct sockaddr *name, socklen_t namelen)
 {
-    if (!is_valid_user_d_addr((void *)name)) {
+    if (!is_valid_udram_addr((void *)name)) {
         return -1;
     }
     return lwip_bind(s, name, namelen);
@@ -904,7 +904,7 @@ static int sys_getaddrinfo(const char *nodename, const char *servname,
 
 static int sys_lwip_getpeername(int s, struct sockaddr *name, socklen_t *namelen)
 {
-    if (!is_valid_user_d_addr((void *)name) || !is_valid_user_d_addr((void *)namelen)) {
+    if (!is_valid_udram_addr((void *)name) || !is_valid_udram_addr((void *)namelen)) {
         return -1;
     }
 
@@ -913,7 +913,7 @@ static int sys_lwip_getpeername(int s, struct sockaddr *name, socklen_t *namelen
 
 static int sys_lwip_getsockname(int s, struct sockaddr *name, socklen_t *namelen)
 {
-    if (!is_valid_user_d_addr((void *)name) || !is_valid_user_d_addr((void *)namelen)) {
+    if (!is_valid_udram_addr((void *)name) || !is_valid_udram_addr((void *)namelen)) {
         return -1;
     }
 
@@ -942,10 +942,10 @@ static size_t sys_lwip_recv(int s, void *mem, size_t len, int flags)
 
 static ssize_t sys_lwip_recvmsg(int s, struct msghdr *message, int flags)
 {
-    if (!is_valid_user_d_addr((void *)message) ||
-        !is_valid_user_d_addr((void *)message->msg_iov) ||
-        !is_valid_user_d_addr((void *)message->msg_iov->iov_base) ||
-        !is_valid_user_d_addr((void *)message->msg_control)) {
+    if (!is_valid_udram_addr((void *)message) ||
+        !is_valid_udram_addr((void *)message->msg_iov) ||
+        !is_valid_udram_addr((void *)message->msg_iov->iov_base) ||
+        !is_valid_udram_addr((void *)message->msg_control)) {
         return -1;
     }
 
@@ -954,9 +954,9 @@ static ssize_t sys_lwip_recvmsg(int s, struct msghdr *message, int flags)
 
 static ssize_t sys_lwip_recvfrom(int s, void *mem, size_t len, int flags, struct sockaddr *from, socklen_t *fromlen)
 {
-    if (!is_valid_user_d_addr((void *)mem) ||
-        !is_valid_user_d_addr((void *)from) ||
-        !is_valid_user_d_addr((void *)fromlen)) {
+    if (!is_valid_udram_addr((void *)mem) ||
+        !is_valid_udram_addr((void *)from) ||
+        !is_valid_udram_addr((void *)fromlen)) {
         return -1;
     }
 
@@ -970,10 +970,10 @@ static size_t sys_lwip_send(int s, const void *data, size_t size, int flags)
 
 static ssize_t sys_lwip_sendmsg(int s, const struct msghdr *msg, int flags)
 {
-    if (!is_valid_user_d_addr((void *)msg) ||
-        !is_valid_user_d_addr((void *)msg->msg_iov) ||
-        !is_valid_user_d_addr((void *)msg->msg_iov->iov_base) ||
-        !is_valid_user_d_addr((void *)msg->msg_control)) {
+    if (!is_valid_udram_addr((void *)msg) ||
+        !is_valid_udram_addr((void *)msg->msg_iov) ||
+        !is_valid_udram_addr((void *)msg->msg_iov->iov_base) ||
+        !is_valid_udram_addr((void *)msg->msg_control)) {
         return -1;
     }
 
@@ -993,7 +993,7 @@ static ssize_t sys_lwip_sendto(int s, const void *data, size_t size, int flags, 
 static const char *sys_lwip_inet_ntop(int af, const void *src, char *dst, socklen_t size)
 {
     if (!is_valid_user_d_addr((void *)src) ||
-        !is_valid_user_d_addr((void *)dst)) {
+        !is_valid_udram_addr((void *)dst)) {
         return NULL;
     }
 
@@ -1003,7 +1003,7 @@ static const char *sys_lwip_inet_ntop(int af, const void *src, char *dst, sockle
 static int sys_lwip_inet_pton(int af, const char *src, void *dst)
 {
     if (!is_valid_user_d_addr((void *)src) ||
-        !is_valid_user_d_addr((void *)dst)) {
+        !is_valid_udram_addr((void *)dst)) {
         return -1;
     }
 
@@ -1054,7 +1054,7 @@ static int sys_write(int s, const void *data, size_t size)
 
 static int sys_read(int s, void *mem, size_t len)
 {
-    if (is_valid_user_d_addr(mem)) {
+    if (is_valid_udram_addr(mem)) {
         return read(s, mem, len);
     }
     return -1;
@@ -1078,7 +1078,7 @@ static int sys_select(int maxfdp1, fd_set *readset, fd_set *writeset, fd_set *ex
 
 static int sys_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-    if (!is_valid_user_d_addr((void *)fds)) {
+    if (!is_valid_udram_addr((void *)fds)) {
         return -1;
     }
 
@@ -1161,7 +1161,7 @@ static esp_err_t sys_gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
 {
     esp_err_t ret;
     usr_gpio_args_t *usr_context = (usr_gpio_args_t *)gpio_handle;
-    if (usr_context && is_valid_user_d_addr(usr_context)) {
+    if (usr_context && is_valid_udram_addr(usr_context)) {
         ret = gpio_isr_handler_remove(usr_context->gpio_num);
         if (ret == ESP_OK) {
             free(usr_context);
@@ -1280,7 +1280,7 @@ static esp_err_t sys_esp_event_handler_instance_unregister(usr_esp_event_base_t 
     }
 
     usr_context_t *usr_context = (usr_context_t *)context;
-    if (usr_context && is_valid_user_d_addr(usr_context)) {
+    if (usr_context && is_valid_udram_addr(usr_context)) {
         ret = esp_event_handler_instance_unregister(sys_event_base, event_id, usr_context->event_handler_instance);
         if (ret == ESP_OK) {
             free(usr_context);
@@ -1304,7 +1304,7 @@ static esp_err_t sys_esp_wifi_set_mode(wifi_mode_t mode)
 
 static esp_err_t sys_esp_wifi_set_config(wifi_interface_t interface, wifi_config_t *conf)
 {
-    if (is_valid_user_d_addr(conf)) {
+    if (is_valid_udram_addr(conf)) {
         return esp_wifi_set_config(interface, conf);
     }
     return -1;
@@ -1327,7 +1327,7 @@ IRAM_ATTR static uint32_t sys_esp_random(void)
 
 static void sys_esp_fill_random(void *buf, size_t len)
 {
-    if (!is_valid_user_d_addr(buf)) {
+    if (!is_valid_udram_addr(buf)) {
         return;
     }
     esp_fill_random(buf, len);
@@ -1375,7 +1375,7 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
 
 esp_err_t sys_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
 {
-    if (!is_valid_kernel_d_addr(timer)) {
+    if (!is_valid_kdram_addr(timer)) {
         return ESP_ERR_INVALID_ARG;
     }
     return esp_timer_start_once(timer, timeout_us);
@@ -1383,7 +1383,7 @@ esp_err_t sys_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us
 
 esp_err_t sys_esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period)
 {
-    if (!is_valid_kernel_d_addr(timer)) {
+    if (!is_valid_kdram_addr(timer)) {
         return ESP_ERR_INVALID_ARG;
     }
     return esp_timer_start_periodic(timer, period);
@@ -1391,7 +1391,7 @@ esp_err_t sys_esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period
 
 esp_err_t sys_esp_timer_stop(esp_timer_handle_t timer)
 {
-    if (!is_valid_kernel_d_addr(timer)) {
+    if (!is_valid_kdram_addr(timer)) {
         return ESP_ERR_INVALID_ARG;
     }
     return esp_timer_stop(timer);
@@ -1399,7 +1399,7 @@ esp_err_t sys_esp_timer_stop(esp_timer_handle_t timer)
 
 esp_err_t sys_esp_timer_delete(esp_timer_handle_t timer)
 {
-    if (!is_valid_kernel_d_addr(timer)) {
+    if (!is_valid_kdram_addr(timer)) {
         return ESP_ERR_INVALID_ARG;
     }
     usr_esp_timer_handle_t *handle = (usr_esp_timer_handle_t *)timer;
@@ -1423,7 +1423,7 @@ IRAM_ATTR int64_t sys_esp_timer_get_next_alarm(void)
 
 bool sys_esp_timer_is_active(esp_timer_handle_t timer)
 {
-    if (!is_valid_kernel_d_addr(timer)) {
+    if (!is_valid_kdram_addr(timer)) {
         return ESP_ERR_INVALID_ARG;
     }
     return esp_timer_is_active(timer);

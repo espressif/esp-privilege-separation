@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include "soc/soc.h"
 #include "sdkconfig.h"
 
@@ -56,7 +57,10 @@ typedef struct {
     usr_resources_t *user_app_resources;
 } usr_custom_app_desc_t;
 
-static inline int is_valid_uiram_addr(void *ptr)
+/*
+ * Function to verify if the ptr is in user space IRAM region
+ */
+static inline bool is_valid_uiram_addr(void *ptr)
 {
     if (ptr >= (void *)&_reserve_w1_iram_start && ptr < (void *)&_reserve_w1_iram_end) {
         return 1;
@@ -65,7 +69,10 @@ static inline int is_valid_uiram_addr(void *ptr)
     return 0;
 }
 
-static inline int is_valid_udram_addr(void *ptr)
+/*
+ * Function to verify if the ptr is in user space DRAM region
+ */
+static inline bool is_valid_udram_addr(void *ptr)
 {
     if (ptr >= (void *)&_reserve_w1_dram_start && ptr < (void *)&_reserve_w1_dram_end) {
         return 1;
@@ -74,7 +81,10 @@ static inline int is_valid_udram_addr(void *ptr)
     return 0;
 }
 
-static inline int is_valid_user_i_addr(void *ptr)
+/*
+ * Function to verify if the ptr is in user space IRAM or Flash text region
+ */
+static inline bool is_valid_user_i_addr(void *ptr)
 {
     if (ptr >= (void *)SOC_UIROM_LOW && ptr < (void *)SOC_UIROM_HIGH) {
         return 1;
@@ -83,7 +93,10 @@ static inline int is_valid_user_i_addr(void *ptr)
     return is_valid_uiram_addr(ptr);
 }
 
-static inline int is_valid_user_d_addr(void *ptr)
+/*
+ * Function to verify if the ptr is in user space DRAM or Flash rodata region
+ */
+static inline bool is_valid_user_d_addr(void *ptr)
 {
     if (ptr >= (void *)SOC_UDROM_LOW && ptr < (void *)SOC_UDROM_HIGH) {
         return 1;
@@ -92,7 +105,10 @@ static inline int is_valid_user_d_addr(void *ptr)
     return is_valid_udram_addr(ptr);
 }
 
-static inline int is_valid_kernel_i_addr(void *ptr)
+/*
+ * Function to verify if the ptr is in protected space IRAM or Flash text region
+ */
+static inline bool is_valid_kernel_i_addr(void *ptr)
 {
     if (is_valid_user_i_addr(ptr)) {
         return 0;
@@ -109,7 +125,10 @@ static inline int is_valid_kernel_i_addr(void *ptr)
     return 0;
 }
 
-static inline int is_valid_kernel_d_addr(void *ptr)
+/*
+ * Function to verify if the ptr is in protected space DRAM or Flash rodata region
+ */
+static inline bool is_valid_kernel_d_addr(void *ptr)
 {
     if (is_valid_user_d_addr(ptr)) {
         return 0;
@@ -130,4 +149,23 @@ static inline int is_valid_kernel_d_addr(void *ptr)
     return 0;
 }
 
+/*
+ * Function to verify if the ptr is in protected space DRAM
+ */
+static inline bool is_valid_kdram_addr(void *ptr)
+{
+    if (is_valid_udram_addr(ptr)) {
+        return 0;
+    }
+
+    if (ptr >= (void *)SOC_DRAM_LOW && ptr < (void *)SOC_DRAM_HIGH) {
+        return 1;
+    }
+
+    if (ptr >= (void *)SOC_RTC_DRAM_LOW && ptr < (void *)SOC_RTC_DRAM_HIGH) {
+        return 1;
+    }
+
+    return 0;
+}
 #endif
