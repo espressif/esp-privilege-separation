@@ -29,6 +29,7 @@
 #include <nvs_flash.h>
 #include "syscall_wrappers.h"
 #include "syscall_priv.h"
+#include "esp_map.h"
 
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -55,8 +56,11 @@
 
 typedef void (*syscall_t)(void);
 
-static DRAM_ATTR QueueHandle_t usr_dispatcher_queue;
-static DRAM_ATTR QueueHandle_t usr_mem_cleanup_queue;
+static DRAM_ATTR int usr_dispatcher_queue_index;
+static DRAM_ATTR int usr_mem_cleanup_queue_index;
+
+static DRAM_ATTR QueueHandle_t usr_dispatcher_queue_handle;
+static DRAM_ATTR QueueHandle_t usr_mem_cleanup_queue_handle;
 
 void esp_time_impl_set_boot_time(uint64_t time_us);
 uint64_t esp_time_impl_get_boot_time(void);
@@ -156,18 +160,6 @@ static uint64_t sys_esp_time_impl_get_boot_time(void)
     return esp_time_impl_get_boot_time();
 }
 
-static int is_valid_user_task(TaskHandle_t xTask)
-{
-    if (pvTaskGetThreadLocalStoragePointer(xTask, 1) == NULL) {
-        /* This means this task is a kernel task.
-         * User task has a kernel stack at this index
-         */
-        return 0;
-    } else {
-        return 1;
-    }
-}
-
 static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
                                    const char * const pcName,
                                    void * const pvParameters,
@@ -216,23 +208,33 @@ static int sys_xTaskCreate(TaskFunction_t pvTaskCode,
 
     *usr_errno = 0;
 
+    int wrapper_index = esp_map_add(NULL, ESP_MAP_TASK_ID);
+    if (!wrapper_index) {
+        goto failure;
+    }
+    esp_map_handle_t *wrapper_handle = esp_map_get_handle(wrapper_index);
+
     /* Suspend the scheduler to ensure that it does not switch to the newly created task.
      * We need to first set the kernel stack as a TLS and only then it should be executed
      */
     vTaskSuspendAll();
     handle = xTaskCreateStaticPinnedToCore(pvTaskCode, pcName, task_ctx->stack_size, pvParameters, uxPriority, xtaskStack, xtaskTCB, xCoreID);
 
+    wrapper_handle->handle = handle;
+
     // The 1st (0th index) TLS pointer is used by pthread
     // 2nd TLS pointer is used to store the kernel stack, used when servicing system calls
     // 3rd TLS pointer is used to store the WORLD of the task. 0 = WORLD0 and 1 = WORLD1
     // 4th TLS pointer is used to store the errno variable
+    // 5th TLS pointer is used to store the wrapper_index for task handle
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_KERN_STACK, kernel_stack, NULL);
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_WORLD, (void *)1, NULL);
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
+    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_SHIM_HANDLE, (void *)wrapper_index, NULL);
     xTaskResumeAll();
 
     if (is_valid_udram_addr(task_ctx->task_handle)) {
-        *(TaskHandle_t *)(task_ctx->task_handle) = handle;
+        *(TaskHandle_t *)(task_ctx->task_handle) = (TaskHandle_t)wrapper_index;
     }
 
     return err;
@@ -258,6 +260,9 @@ void vPortCleanUpTCB (void *pxTCB)
     void *usr_ptr;
     void *curr_stack = pxTaskGetStackStart(pxTCB);
 
+    int wrapper_index = (int)pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_SHIM_HANDLE);
+    esp_map_remove(wrapper_index);
+
     if (is_valid_udram_addr(curr_stack)) {
         /* The stack is the user space stack. Free the kernel space stack */
         void *k_stack = pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_KERN_STACK);
@@ -277,12 +282,12 @@ void vPortCleanUpTCB (void *pxTCB)
 #endif
     }
 
-    if (usr_mem_cleanup_queue) {
+    if (usr_mem_cleanup_queue_handle) {
         // Send user space stack
-        xQueueSend(usr_mem_cleanup_queue, &usr_ptr, 0);
+        xQueueSend(usr_mem_cleanup_queue_handle, &usr_ptr, 0);
         // Send user space errno variable
         usr_ptr = pvTaskGetThreadLocalStoragePointer(pxTCB, ESP_PA_TLS_OFFSET_ERRNO);
-        xQueueSend(usr_mem_cleanup_queue, &usr_ptr, 0);
+        xQueueSend(usr_mem_cleanup_queue_handle, &usr_ptr, 0);
     }
 
     /* prvDeleteTCB accesses TCB members after this function returns so to avoid use-after-free case,
@@ -293,7 +298,15 @@ void vPortCleanUpTCB (void *pxTCB)
 
 static void sys_vTaskDelete(TaskHandle_t TaskHandle)
 {
-    return vTaskDelete(TaskHandle);
+    if (TaskHandle == NULL) {
+        return vTaskDelete(NULL);
+    }
+    int wrapper_index = (int)TaskHandle;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return;
+    }
+    return vTaskDelete((TaskHandle_t)wrapper_handle->handle);
 }
 
 static void sys_vTaskDelay(TickType_t TickstoWait)
@@ -308,63 +321,85 @@ static void sys_vTaskDelayUntil(TickType_t * const pxPreviousWakeTime, const Tic
 
 static UBaseType_t sys_uxTaskPriorityGet(const TaskHandle_t xTask)
 {
-    return uxTaskPriorityGet(xTask);
+    if (xTask == NULL) {
+        return uxTaskPriorityGet(NULL);
+    }
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
+    }
+    return uxTaskPriorityGet((TaskHandle_t)wrapper_handle->handle);
 }
 
 static void sys_vTaskPrioritySet(TaskHandle_t xTask, UBaseType_t uxNewPriority)
 {
-    if (!is_valid_user_task(xTask)) {
-        ESP_LOGE(TAG, "Invalid task handle");
+    if (xTask == NULL) {
+        return vTaskPrioritySet(xTask, uxNewPriority);
+    }
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
         return;
     }
-
-    vTaskPrioritySet(xTask, uxNewPriority);
+    vTaskPrioritySet((TaskHandle_t)wrapper_handle->handle, uxNewPriority);
 }
 
 static UBaseType_t sys_uxTaskPriorityGetFromISR(const TaskHandle_t xTask)
 {
-    return uxTaskPriorityGetFromISR(xTask);
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
+    }
+    return uxTaskPriorityGetFromISR((TaskHandle_t)wrapper_handle->handle);
 }
 
 static void sys_vTaskSuspend(TaskHandle_t xTaskToSuspend)
 {
-    if (!is_valid_user_task(xTaskToSuspend)) {
-        ESP_LOGE(TAG, "Invalid task handle");
+    if (xTaskToSuspend == NULL) {
+        return vTaskSuspend(NULL);
+    }
+    int wrapper_index = (int)xTaskToSuspend;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
         return;
     }
-
-    vTaskSuspend(xTaskToSuspend);
+    vTaskSuspend((TaskHandle_t)wrapper_handle->handle);
 }
 
 static void sys_vTaskResume(TaskHandle_t xTaskToResume)
 {
-    if (!is_valid_user_task(xTaskToResume)) {
-        ESP_LOGE(TAG, "Invalid task handle");
+    int wrapper_index = (int)xTaskToResume;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
         return;
     }
-
-    vTaskResume(xTaskToResume);
+    vTaskResume((TaskHandle_t)wrapper_handle->handle);
 }
 
 static BaseType_t sys_xTaskResumeFromISR(TaskHandle_t xTaskToResume)
 {
-    if (!is_valid_user_task(xTaskToResume)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    int wrapper_index = (int)xTaskToResume;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
     }
-
-    return xTaskResumeFromISR(xTaskToResume);
+    return xTaskResumeFromISR((TaskHandle_t)wrapper_handle->handle);
 }
 
 static BaseType_t sys_xTaskAbortDelay(TaskHandle_t xTask)
 {
 #if INCLUDE_xTaskAbortDelay
-    if (!is_valid_user_task(xTask)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    if (xTask == NULL) {
+        xTaskAbortDelay(NULL);
     }
-
-    return xTaskAbortDelay(xTask);
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
+    }
+    return xTaskAbortDelay((TaskHandle_t)wrapper_handle->handle);
 #endif
     return 0;
 }
@@ -413,32 +448,32 @@ static void sys_vTaskStepTick(const TickType_t xTicksToJump)
 
 static BaseType_t sys_xTaskGenericNotify(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue)
 {
-    if (!is_valid_user_task(xTaskToNotify)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    int wrapper_index = (int)xTaskToNotify;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
     }
-
-    return xTaskGenericNotify(xTaskToNotify, ulValue, eAction, pulPreviousNotificationValue);
+    return xTaskGenericNotify((TaskHandle_t)wrapper_handle->handle, ulValue, eAction, pulPreviousNotificationValue);
 }
 
 static BaseType_t sys_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue, BaseType_t *pxHigherPriorityTaskWoken)
 {
-    if (!is_valid_user_task(xTaskToNotify)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    int wrapper_index = (int)xTaskToNotify;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
     }
-
-    return xTaskGenericNotifyFromISR(xTaskToNotify, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken);
+    return xTaskGenericNotifyFromISR((TaskHandle_t)wrapper_handle->handle, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken);
 }
 
 static void sys_vTaskNotifyGiveFromISR(TaskHandle_t xTaskToNotify, BaseType_t *pxHigherPriorityTaskWoken)
 {
-    if (!is_valid_user_task(xTaskToNotify)) {
-        ESP_LOGE(TAG, "Invalid task handle");
+    int wrapper_index = (int)xTaskToNotify;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
         return;
     }
-
-    vTaskNotifyGiveFromISR(xTaskToNotify, pxHigherPriorityTaskWoken);
+    vTaskNotifyGiveFromISR((TaskHandle_t)wrapper_handle->handle, pxHigherPriorityTaskWoken);
 }
 
 static uint32_t sys_ulTaskNotifyTake(BaseType_t xClearCountOnExit, TickType_t xTicksToWait)
@@ -453,17 +488,21 @@ static BaseType_t sys_xTaskNotifyWait(uint32_t ulBitsToClearOnEntry, uint32_t ul
 
 static BaseType_t sys_xTaskNotifyStateClear(TaskHandle_t xTask)
 {
-    if (!is_valid_user_task(xTask)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    if (xTask == NULL) {
+        return xTaskNotifyStateClear(NULL);
     }
-
-    return xTaskNotifyStateClear(xTask);
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
+    }
+    return xTaskNotifyStateClear((TaskHandle_t)wrapper_handle->handle);
 }
 
 static TaskHandle_t sys_xTaskGetCurrentTaskHandle(void)
 {
-    return xTaskGetCurrentTaskHandle();
+    TaskHandle_t handle = xTaskGetCurrentTaskHandle();
+    return (TaskHandle_t)pvTaskGetThreadLocalStoragePointer(handle, ESP_PA_TLS_OFFSET_SHIM_HANDLE);
 }
 
 static TaskHandle_t sys_xTaskGetIdleTaskHandle(void)
@@ -473,39 +512,49 @@ static TaskHandle_t sys_xTaskGetIdleTaskHandle(void)
 
 static UBaseType_t sys_uxTaskGetStackHighWaterMark(TaskHandle_t xTask)
 {
-    if (!is_valid_user_task(xTask)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    if (xTask == NULL) {
+        return uxTaskGetStackHighWaterMark(NULL);
     }
-
-    return uxTaskGetStackHighWaterMark(xTask);
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
+    }
+    return uxTaskGetStackHighWaterMark((TaskHandle_t)wrapper_handle->handle);
 }
 
 static eTaskState sys_eTaskGetState(TaskHandle_t xTask)
 {
-    if (!is_valid_user_task(xTask)) {
-        ESP_LOGE(TAG, "Invalid task handle");
-        return 0;
+    if (xTask == NULL) {
+        return uxTaskGetStackHighWaterMark(NULL);
     }
-
-    return eTaskGetState(xTask);
+    int wrapper_index = (int)xTask;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
+        return -1;
+    }
+    return eTaskGetState((TaskHandle_t)wrapper_handle->handle);
 }
 
 static char *sys_pcTaskGetName(TaskHandle_t xTaskToQuery)
 {
-    if (!is_valid_user_task(xTaskToQuery)) {
-        ESP_LOGE(TAG, "Invalid task handle");
+    if (xTaskToQuery == NULL) {
+        return pcTaskGetName(NULL);
+    }
+    int wrapper_index = (int)xTaskToQuery;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+    if (wrapper_handle == NULL) {
         return NULL;
     }
-
-    return pcTaskGetName(xTaskToQuery);
+    return pcTaskGetName((TaskHandle_t)wrapper_handle->handle);
 }
 
 static TaskHandle_t sys_xTaskGetHandle(const char *pcNameToQuery)
 {
 #if INCLUDE_xTaskGetHandle
     if (is_valid_user_d_addr((void *)pcNameToQuery)) {
-        return xTaskGetHandle(pcNameToQuery);
+        TaskHandle_t handle = xTaskGetHandle(pcNameToQuery);
+        return (TaskHandle_t)pvTaskGetThreadLocalStoragePointer(handle, ESP_PA_TLS_OFFSET_SHIM_HANDLE);
     } else {
         return NULL;
     }
@@ -535,47 +584,87 @@ static UBaseType_t sys_uxTaskGetNumberOfTasks(void)
 
 static QueueHandle_t sys_xQueueGenericCreate(uint32_t QueueLength, uint32_t ItemSize, uint8_t ucQueueType)
 {
+    QueueHandle_t q;
     if (ucQueueType == queueQUEUE_TYPE_CLEANUP) {
-        if (usr_mem_cleanup_queue == NULL) {
-            usr_mem_cleanup_queue = xQueueGenericCreate(QueueLength, ItemSize, queueQUEUE_TYPE_BASE);
+        if (!usr_mem_cleanup_queue_index) {
+            q = xQueueGenericCreate(QueueLength, ItemSize, queueQUEUE_TYPE_BASE);
+            if (q == NULL) {
+                return NULL;
+            }
+            usr_mem_cleanup_queue_index = (intptr_t)esp_map_add(q, ESP_MAP_QUEUE_ID);
+            if (!usr_mem_cleanup_queue_index) {
+                ESP_LOGE(TAG, "Insufficient memory for shim struct");
+                vQueueDelete(q);
+                return NULL;
+            }
+            usr_mem_cleanup_queue_handle = q;
         }
-        return usr_mem_cleanup_queue;
+        return (QueueHandle_t)usr_mem_cleanup_queue_index;
     }
 
     if (ucQueueType == queueQUEUE_TYPE_DISPATCH) {
-        if (usr_dispatcher_queue == NULL) {
-            usr_dispatcher_queue = xQueueGenericCreate(QueueLength, ItemSize, queueQUEUE_TYPE_BASE);
+        if (!usr_dispatcher_queue_index) {
+            q = xQueueGenericCreate(QueueLength, ItemSize, queueQUEUE_TYPE_BASE);
+            if (q == NULL) {
+                return NULL;
+            }
+            usr_dispatcher_queue_index = (intptr_t)esp_map_add(q, ESP_MAP_QUEUE_ID);
+            if (!usr_dispatcher_queue_index) {
+                ESP_LOGE(TAG, "Insufficient memory for shim struct");
+                vQueueDelete(q);
+                return NULL;
+            }
+            usr_dispatcher_queue_handle = q;
         }
-        return usr_dispatcher_queue;
+        return (QueueHandle_t)usr_dispatcher_queue_index;
     }
 
-    return xQueueGenericCreate(QueueLength, ItemSize, ucQueueType);
+    q = xQueueGenericCreate(QueueLength, ItemSize, ucQueueType);
+    if (q == NULL) {
+        return NULL;
+    }
+
+    int wrapper_index = esp_map_add(q, ESP_MAP_QUEUE_ID);
+    if (!wrapper_index) {
+        ESP_LOGE(TAG, "Insufficient memory for shim struct");
+        vQueueDelete(q);
+        return NULL;
+    }
+    return (QueueHandle_t)wrapper_index;
 }
 
 static void sys_vQueueDelete(QueueHandle_t xQueue)
 {
-    if (xQueue == usr_mem_cleanup_queue) {
+    if (xQueue == (QueueHandle_t)usr_mem_cleanup_queue_index) {
         ESP_LOGE(TAG, "User mem cleanup queue deletion forbidden");
         return;
     }
 
-    if (xQueue == usr_dispatcher_queue) {
+    if (xQueue == (QueueHandle_t)usr_dispatcher_queue_index) {
         ESP_LOGE(TAG, "User dispatcher queue deletion forbidden");
         return;
     }
 
-    if (is_valid_kdram_addr(xQueue)) {
-        vQueueDelete(xQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return;
     }
+    vQueueDelete((QueueHandle_t)wrapper_handle->handle);
+    esp_map_remove(wrapper_index);
 }
 
 static BaseType_t sys_xQueueGenericSend(QueueHandle_t xQueue, const void * const pvItemToQueue, TickType_t xTicksToWait, const BaseType_t xCopyPosition)
 {
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
     // Incase of Semaphore, pvItemToQueue is NULL. Add an extra check for uxItemSize, which for Semaphore is 0
     // If the uxItemSize if 0, we can allow invalid pvItemToQueue pointer
-    if (is_valid_kdram_addr(xQueue) &&
-        (is_valid_user_d_addr((void *)pvItemToQueue) || ((StaticQueue_t *)xQueue)->uxDummy4[2] == 0)) {
-        return xQueueGenericSend(xQueue, pvItemToQueue, xTicksToWait, xCopyPosition);
+    if ((is_valid_user_d_addr((void *)pvItemToQueue) || ((StaticQueue_t *)wrapper_handle->handle)->uxDummy4[2] == 0)) {
+        return xQueueGenericSend((QueueHandle_t)wrapper_handle->handle, pvItemToQueue, xTicksToWait, xCopyPosition);
     } else {
         return 0;
     }
@@ -583,8 +672,13 @@ static BaseType_t sys_xQueueGenericSend(QueueHandle_t xQueue, const void * const
 
 static BaseType_t sys_xQueueGenericSendFromISR(QueueHandle_t xQueue, const void * const pvItemToQueue, BaseType_t * const pxHigherPriorityTaskWoken, const BaseType_t xCopyPosition)
 {
-    if (is_valid_kdram_addr(xQueue) && is_valid_user_d_addr((void *)pvItemToQueue)) {
-        return xQueueGenericSendFromISR(xQueue, pvItemToQueue, pxHigherPriorityTaskWoken, xCopyPosition);
+    if (is_valid_user_d_addr((void *)pvItemToQueue)) {
+        int wrapper_index = (int)xQueue;
+        esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+        if (wrapper_handle == NULL) {
+            return 0;
+        }
+        return xQueueGenericSendFromISR((QueueHandle_t)wrapper_handle->handle, pvItemToQueue, pxHigherPriorityTaskWoken, xCopyPosition);
     } else {
         return 0;
     }
@@ -592,16 +686,26 @@ static BaseType_t sys_xQueueGenericSendFromISR(QueueHandle_t xQueue, const void 
 
 static int sys_xQueueReceive(QueueHandle_t xQueue, void * const buffer, TickType_t TickstoWait)
 {
-    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr(buffer)) {
-        return xQueueReceive(xQueue, buffer, TickstoWait);
+    if (is_valid_udram_addr(buffer)) {
+        int wrapper_index = (int)xQueue;
+        esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+        if (wrapper_handle == NULL) {
+            return 0;
+        }
+        return xQueueReceive((QueueHandle_t)wrapper_handle->handle, buffer, TickstoWait);
     }
     return -1;
 }
 
 static BaseType_t sys_xQueueReceiveFromISR(QueueHandle_t xQueue, void * const pvBuffer, BaseType_t * const pxHigherPriorityTaskWoken)
 {
-    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr((void *)pvBuffer)) {
-        return xQueueReceiveFromISR(xQueue, pvBuffer, pxHigherPriorityTaskWoken);
+    if (is_valid_udram_addr((void *)pvBuffer)) {
+        int wrapper_index = (int)xQueue;
+        esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+        if (wrapper_handle == NULL) {
+            return 0;
+        }
+        return xQueueReceiveFromISR((QueueHandle_t)wrapper_handle->handle, pvBuffer, pxHigherPriorityTaskWoken);
     } else {
         return 0;
     }
@@ -609,28 +713,53 @@ static BaseType_t sys_xQueueReceiveFromISR(QueueHandle_t xQueue, void * const pv
 
 static UBaseType_t sys_uxQueueMessagesWaiting(const QueueHandle_t xQueue)
 {
-    return uxQueueMessagesWaiting(xQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return uxQueueMessagesWaiting((QueueHandle_t)wrapper_handle->handle);
 }
 
 static UBaseType_t sys_uxQueueMessagesWaitingFromISR(const QueueHandle_t xQueue)
 {
-    return uxQueueMessagesWaitingFromISR(xQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return uxQueueMessagesWaitingFromISR((QueueHandle_t)wrapper_handle->handle);
 }
 
 static UBaseType_t sys_uxQueueSpacesAvailable(const QueueHandle_t xQueue)
 {
-    return uxQueueSpacesAvailable(xQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return uxQueueSpacesAvailable((QueueHandle_t)wrapper_handle->handle);
 }
 
 static BaseType_t sys_xQueueGenericReset(QueueHandle_t xQueue, BaseType_t xNewQueue)
 {
-    return xQueueGenericReset(xQueue, xNewQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueGenericReset((QueueHandle_t)wrapper_handle->handle, xNewQueue);
 }
 
 static BaseType_t sys_xQueuePeek(QueueHandle_t xQueue, void * const pvBuffer, TickType_t xTicksToWait)
 {
-    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr((void *)pvBuffer)) {
-        return xQueuePeek(xQueue, pvBuffer, xTicksToWait);
+    if (is_valid_udram_addr((void *)pvBuffer)) {
+        int wrapper_index = (int)xQueue;
+        esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+        if (wrapper_handle == NULL) {
+            return 0;
+        }
+        return xQueuePeek((QueueHandle_t)wrapper_handle->handle, pvBuffer, xTicksToWait);
     } else {
         return 0;
     }
@@ -638,8 +767,13 @@ static BaseType_t sys_xQueuePeek(QueueHandle_t xQueue, void * const pvBuffer, Ti
 
 static BaseType_t sys_xQueuePeekFromISR(QueueHandle_t xQueue,  void * const pvBuffer)
 {
-    if (is_valid_kdram_addr(xQueue) && is_valid_udram_addr((void *)pvBuffer)) {
-        return xQueuePeekFromISR(xQueue, pvBuffer);
+    if (is_valid_udram_addr((void *)pvBuffer)) {
+        int wrapper_index = (int)xQueue;
+        esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+        if (wrapper_handle == NULL) {
+            return 0;
+        }
+        return xQueuePeekFromISR((QueueHandle_t)wrapper_handle->handle, pvBuffer);
     } else {
         return 0;
     }
@@ -647,12 +781,22 @@ static BaseType_t sys_xQueuePeekFromISR(QueueHandle_t xQueue,  void * const pvBu
 
 static BaseType_t sys_xQueueIsQueueEmptyFromISR(const QueueHandle_t xQueue)
 {
-    return xQueueIsQueueEmptyFromISR(xQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueIsQueueEmptyFromISR((QueueHandle_t)wrapper_handle->handle);
 }
 
 static BaseType_t sys_xQueueIsQueueFullFromISR(const QueueHandle_t xQueue)
 {
-    return xQueueIsQueueFullFromISR(xQueue);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueIsQueueFullFromISR((QueueHandle_t)wrapper_handle->handle);
 }
 
 static QueueSetHandle_t sys_xQueueCreateSet(const UBaseType_t uxEventQueueLength)
@@ -661,67 +805,141 @@ static QueueSetHandle_t sys_xQueueCreateSet(const UBaseType_t uxEventQueueLength
 
     pxQueue = sys_xQueueGenericCreate(uxEventQueueLength, sizeof(QueueHandle_t *), queueQUEUE_TYPE_SET);
 
-    return pxQueue;
+    int wrapper_index = esp_map_add(pxQueue, ESP_MAP_QUEUE_ID);
+    if (!wrapper_index) {
+        vQueueDelete(pxQueue);
+        return NULL;
+    }
+
+    return (QueueSetHandle_t)wrapper_index;
 }
 
 static BaseType_t sys_xQueueAddToSet(QueueSetMemberHandle_t xQueueOrSemaphore, QueueSetHandle_t xQueueSet)
 {
-    return xQueueAddToSet(xQueueOrSemaphore, xQueueSet);
+    int wrapper_index = (int)xQueueOrSemaphore;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueAddToSet(xQueueOrSemaphore, (QueueHandle_t)wrapper_handle->handle);
 }
 
 static BaseType_t sys_xQueueRemoveFromSet(QueueSetMemberHandle_t xQueueOrSemaphore, QueueSetHandle_t xQueueSet)
 {
-    return xQueueRemoveFromSet(xQueueOrSemaphore, xQueueSet);
+    int wrapper_index = (int)xQueueOrSemaphore;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueRemoveFromSet(xQueueOrSemaphore, (QueueHandle_t)wrapper_handle->handle);
 }
 
 static QueueSetMemberHandle_t sys_xQueueSelectFromSet(QueueSetHandle_t xQueueSet, TickType_t const xTicksToWait)
 {
-    return xQueueSelectFromSet(xQueueSet, xTicksToWait);
+    int wrapper_index = (int)xQueueSet;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return NULL;
+    }
+    return xQueueSelectFromSet((QueueHandle_t)wrapper_handle->handle, xTicksToWait);
 }
 
 static QueueSetMemberHandle_t sys_xQueueSelectFromSetFromISR(QueueSetHandle_t xQueueSet)
 {
-    return xQueueSelectFromSetFromISR(xQueueSet);
+    int wrapper_index = (int)xQueueSet;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return NULL;
+    }
+    return xQueueSelectFromSetFromISR((QueueHandle_t)wrapper_handle->handle);
 }
 
 static QueueHandle_t sys_xQueueCreateCountingSemaphore(const UBaseType_t uxMaxCount, const UBaseType_t uxInitialCount)
 {
-    return xQueueCreateCountingSemaphore(uxMaxCount, uxInitialCount);
+    QueueHandle_t q = xQueueCreateCountingSemaphore(uxMaxCount, uxInitialCount);
+    if (q == NULL) {
+        return NULL;
+    }
+    int wrapper_index = esp_map_add(q, ESP_MAP_QUEUE_ID);
+    if (!wrapper_index) {
+        vQueueDelete(q);
+        return NULL;
+    }
+    return (QueueHandle_t)wrapper_index;
 }
 
 static QueueHandle_t sys_xQueueCreateMutex(const uint8_t ucQueueType)
 {
-    return xQueueCreateMutex(ucQueueType);
+    QueueHandle_t q = xQueueCreateMutex(ucQueueType);
+    if (q == NULL) {
+        return NULL;
+    }
+    int wrapper_index = esp_map_add(q, ESP_MAP_QUEUE_ID);
+    if (!wrapper_index) {
+        vQueueDelete(q);
+        return NULL;
+    }
+    return (QueueHandle_t)wrapper_index;
 }
 
 static TaskHandle_t sys_xQueueGetMutexHolder(QueueHandle_t xSemaphore)
 {
-    return xQueueGetMutexHolder(xSemaphore);
+    int wrapper_index = (int)xSemaphore;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return NULL;
+    }
+    TaskHandle_t xTask = xQueueGetMutexHolder((QueueHandle_t)wrapper_handle->handle);
+    return (TaskHandle_t)pvTaskGetThreadLocalStoragePointer(xTask, ESP_PA_TLS_OFFSET_SHIM_HANDLE);
 }
 
 static BaseType_t sys_xQueueSemaphoreTake(QueueHandle_t xQueue, TickType_t xTicksToWait)
 {
-    return xQueueSemaphoreTake(xQueue, xTicksToWait);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    // Incase of Semaphore, pvItemToQueue is NULL. Add an extra check for uxItemSize, which for Semaphore is 0.
+    if (((StaticQueue_t *)wrapper_handle->handle)->uxDummy4[2] != 0) {
+        return 0;
+    }
+    return xQueueSemaphoreTake((QueueHandle_t)wrapper_handle->handle, xTicksToWait);
 }
 
 static BaseType_t sys_xQueueTakeMutexRecursive(QueueHandle_t xMutex, TickType_t xTicksToWait)
 {
-    return xQueueTakeMutexRecursive(xMutex, xTicksToWait);
+    int wrapper_index = (int)xMutex;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueTakeMutexRecursive((QueueHandle_t)wrapper_handle->handle, xTicksToWait);
 }
 
 static BaseType_t sys_xQueueGiveMutexRecursive(QueueHandle_t xMutex)
 {
-    return xQueueGiveMutexRecursive(xMutex);
+    int wrapper_index = (int)xMutex;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueGiveMutexRecursive((QueueHandle_t)wrapper_handle->handle);
 }
 
 static BaseType_t sys_xQueueGiveFromISR(QueueHandle_t xQueue, BaseType_t * const pxHigherPriorityTaskWoken)
 {
-    return xQueueGiveFromISR(xQueue, pxHigherPriorityTaskWoken);
+    int wrapper_index = (int)xQueue;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xQueueGiveFromISR((QueueHandle_t)wrapper_handle->handle, pxHigherPriorityTaskWoken);
 }
 
 static void sys_xtimer_cb(void *timer)
 {
-    if (usr_dispatcher_queue == NULL) {
+    if (!usr_dispatcher_queue_handle) {
         return;
     }
 
@@ -731,7 +949,7 @@ static void sys_xtimer_cb(void *timer)
     };
     memcpy(&dispatch_ctx.dispatch_data.xtimer_args, usr_context, sizeof(usr_xtimer_context_t));
 
-    if (xQueueSend(usr_dispatcher_queue, &dispatch_ctx, portMAX_DELAY) != pdPASS) {
+    if (xQueueSend(usr_dispatcher_queue_handle, &dispatch_ctx, portMAX_DELAY) != pdPASS) {
         return;
     }
 }
@@ -743,6 +961,7 @@ static TimerHandle_t sys_xTimerCreate(const char * const pcTimerName,
                                       TimerCallbackFunction_t pxCallbackFunction)
 {
     TimerHandle_t handle;
+    int wrapper_index = 0;
 
     if (!(is_valid_user_i_addr(pxCallbackFunction))) {
         ESP_LOGE(TAG, "Incorrect address space for callback function or user queue");
@@ -760,85 +979,170 @@ static TimerHandle_t sys_xTimerCreate(const char * const pcTimerName,
     if (handle == NULL) {
         free(usr_context);
     } else {
+        wrapper_index = esp_map_add(handle, ESP_MAP_XTIMER_ID);
+        if (!wrapper_index) {
+            xTimerDelete(handle, portMAX_DELAY);
+            free(usr_context);
+            return NULL;
+        }
         usr_context->usr_cb = pxCallbackFunction;
         usr_context->usr_timer_id = pvTimerID;
-        usr_context->timerhandle = handle;
+        usr_context->timerhandle = (void *)wrapper_index;
     }
-    return handle;
+    return (TimerHandle_t)wrapper_index;
 }
 
 static BaseType_t sys_xTimerIsTimerActive(TimerHandle_t xTimer)
 {
-    return xTimerIsTimerActive(xTimer);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return pdFALSE;
+    }
+    return xTimerIsTimerActive((TimerHandle_t)wrapper_handle->handle);
 }
 
 static void *sys_pvTimerGetTimerID(const TimerHandle_t xTimer)
 {
-    usr_xtimer_context_t *usr_context = (usr_xtimer_context_t*)pvTimerGetTimerID(xTimer);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return NULL;
+    }
+    usr_xtimer_context_t *usr_context = (usr_xtimer_context_t*)pvTimerGetTimerID((TimerHandle_t)wrapper_handle->handle);
 
     return usr_context->usr_timer_id;
 }
 
 static const char *sys_pcTimerGetName(TimerHandle_t xTimer)
 {
-    return pcTimerGetName(xTimer);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return NULL;
+    }
+    return pcTimerGetName((TimerHandle_t)wrapper_handle->handle);
 }
 
 static void sys_vTimerSetReloadMode(TimerHandle_t xTimer, const UBaseType_t uxAutoReload)
 {
-    vTimerSetReloadMode(xTimer, uxAutoReload);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return;
+    }
+    vTimerSetReloadMode((TimerHandle_t)wrapper_handle->handle, uxAutoReload);
 }
 
 static BaseType_t sys_xTimerGenericCommand(TimerHandle_t xTimer, const BaseType_t xCommandID, const TickType_t xOptionalValue, BaseType_t * const pxHigherPriorityTaskWoken, const TickType_t xTicksToWait)
 {
-    return xTimerGenericCommand(xTimer, xCommandID, xOptionalValue, pxHigherPriorityTaskWoken, xTicksToWait);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return pdFAIL;
+    }
+    int ret = xTimerGenericCommand((TimerHandle_t)wrapper_handle->handle, xCommandID, xOptionalValue, pxHigherPriorityTaskWoken, xTicksToWait);
+    if (ret == pdPASS && xCommandID == tmrCOMMAND_DELETE) {
+        esp_map_remove(wrapper_index);
+    }
+    return ret;
 }
 
 static void sys_vTimerSetTimerID(TimerHandle_t xTimer, void *pvNewID)
 {
-    usr_xtimer_context_t *usr_context = (usr_xtimer_context_t*)pvTimerGetTimerID(xTimer);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return;
+    }
+    usr_xtimer_context_t *usr_context = (usr_xtimer_context_t*)pvTimerGetTimerID((TimerHandle_t)wrapper_handle->handle);
 
     usr_context->usr_timer_id = pvNewID;
 }
 
 static TickType_t sys_xTimerGetPeriod(TimerHandle_t xTimer)
 {
-    return xTimerGetPeriod(xTimer);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xTimerGetPeriod((TimerHandle_t)wrapper_handle->handle);
 }
 
 static TickType_t sys_xTimerGetExpiryTime(TimerHandle_t xTimer)
 {
-    return xTimerGetExpiryTime(xTimer);
+    int wrapper_index = (int)xTimer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xTimerGetExpiryTime((TimerHandle_t)wrapper_handle->handle);
 }
 
 static EventGroupHandle_t sys_xEventGroupCreate(void)
 {
-    return xEventGroupCreate();
+    EventGroupHandle_t handle = xEventGroupCreate();
+    if (handle == NULL) {
+        return NULL;
+    }
+    int wrapper_index = esp_map_add(handle, ESP_MAP_EVENT_GROUP_ID);
+    if (!wrapper_index) {
+        vEventGroupDelete(handle);
+        return NULL;
+    }
+    return (EventGroupHandle_t)wrapper_index;
 }
 
 static EventBits_t sys_xEventGroupWaitBits(EventGroupHandle_t xEventGroup, const EventBits_t uxBitsToWaitFor, const BaseType_t xClearOnExit, const BaseType_t xWaitForAllBits, TickType_t xTicksToWait)
 {
-    return xEventGroupWaitBits(xEventGroup, uxBitsToWaitFor, xClearOnExit, xWaitForAllBits, xTicksToWait);
+    int wrapper_index = (int)xEventGroup;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_EVENT_GROUP_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xEventGroupWaitBits((EventGroupHandle_t)wrapper_handle->handle, uxBitsToWaitFor, xClearOnExit, xWaitForAllBits, xTicksToWait);
 }
 
 static EventBits_t sys_xEventGroupSetBits(EventGroupHandle_t xEventGroup, const EventBits_t uxBitsToSet)
 {
-    return xEventGroupSetBits(xEventGroup, uxBitsToSet);
+    int wrapper_index = (int)xEventGroup;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_EVENT_GROUP_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xEventGroupSetBits((EventGroupHandle_t)wrapper_handle->handle, uxBitsToSet);
 }
 
 static EventBits_t sys_xEventGroupClearBits(EventGroupHandle_t xEventGroup, const EventBits_t uxBitsToClear)
 {
-    return xEventGroupClearBits(xEventGroup, uxBitsToClear);
+    int wrapper_index = (int)xEventGroup;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_EVENT_GROUP_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xEventGroupClearBits((EventGroupHandle_t)wrapper_handle->handle, uxBitsToClear);
 }
 
 static EventBits_t sys_xEventGroupSync(EventGroupHandle_t xEventGroup, const EventBits_t uxBitsToSet, const EventBits_t uxBitsToWaitFor, TickType_t xTicksToWait)
 {
-    return xEventGroupSync(xEventGroup, uxBitsToSet, uxBitsToWaitFor, xTicksToWait);
+    int wrapper_index = (int)xEventGroup;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_EVENT_GROUP_ID);
+    if (wrapper_handle == NULL) {
+        return 0;
+    }
+    return xEventGroupSync((EventGroupHandle_t)wrapper_handle->handle, uxBitsToSet, uxBitsToWaitFor, xTicksToWait);
 }
 
 static void sys_vEventGroupDelete(EventGroupHandle_t xEventGroup)
 {
-    vEventGroupDelete(xEventGroup);
+    int wrapper_index = (int)xEventGroup;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_EVENT_GROUP_ID);
+    if (wrapper_handle == NULL) {
+        return;
+    }
+    vEventGroupDelete((EventGroupHandle_t)wrapper_handle->handle);
+    esp_map_remove(wrapper_index);
     return;
 }
 
@@ -1101,7 +1405,7 @@ static int sys_fcntl(int s, int cmd, int val)
 
 IRAM_ATTR static void sys_gpio_isr_handler(void *args)
 {
-    if (usr_dispatcher_queue == NULL) {
+    if (!usr_dispatcher_queue_handle) {
         return;
     }
 
@@ -1110,8 +1414,9 @@ IRAM_ATTR static void sys_gpio_isr_handler(void *args)
         .event = ESP_SYSCALL_EVENT_GPIO,
     };
     memcpy(&dispatch_ctx.dispatch_data.gpio_args, args, sizeof(usr_gpio_args_t));
-    if (xQueueSendFromISR(usr_dispatcher_queue, &dispatch_ctx, &need_yield) != pdPASS) {
+    if (xQueueSendFromISR(usr_dispatcher_queue_handle, &dispatch_ctx, &need_yield) != pdPASS) {
         return;
+
     }
     if (need_yield == pdTRUE) {
         portYIELD_FROM_ISR();
@@ -1152,7 +1457,8 @@ static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t is
     if (ret != ESP_OK) {
         free(usr_context);
     } else {
-        *gpio_handle = usr_context;
+        int wrapper_index = esp_map_add(usr_context, ESP_MAP_GPIO_ID);
+        *gpio_handle = (usr_gpio_handle_t)wrapper_index;
     }
     return ret;
 }
@@ -1160,16 +1466,18 @@ static esp_err_t sys_gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t is
 static esp_err_t sys_gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
 {
     esp_err_t ret;
-    usr_gpio_args_t *usr_context = (usr_gpio_args_t *)gpio_handle;
-    if (usr_context && is_valid_udram_addr(usr_context)) {
-        ret = gpio_isr_handler_remove(usr_context->gpio_num);
-        if (ret == ESP_OK) {
-            free(usr_context);
-        }
-        return ret;
-    } else {
+    int wrapper_index = (int)gpio_handle;
+    esp_map_handle_t *wrapper_handle = (esp_map_handle_t *)esp_map_verify(wrapper_index, ESP_MAP_GPIO_ID);
+    if (!wrapper_handle) {
         return ESP_ERR_INVALID_ARG;
     }
+    usr_gpio_args_t *usr_context = (usr_gpio_args_t *)wrapper_handle->handle;
+    ret = gpio_isr_handler_remove(usr_context->gpio_num);
+    if (ret == ESP_OK) {
+        free(usr_context);
+        esp_map_remove(wrapper_index);
+    }
+    return ret;
 }
 
 static esp_err_t sys_nvs_flash_init()
@@ -1189,13 +1497,19 @@ static esp_err_t sys_esp_event_loop_create_default()
 
 static esp_netif_t* sys_esp_netif_create_default_wifi_sta()
 {
-    return esp_netif_create_default_wifi_sta();
+    esp_netif_t *handle = esp_netif_create_default_wifi_sta();
+    int wrapper_index = esp_map_add(handle, ESP_MAP_ESP_NETIF_ID);
+    if (!wrapper_index) {
+        esp_netif_destroy(handle);
+        return NULL;
+    }
+    return (esp_netif_t *)wrapper_index;
 }
 
 static void sys_event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
-    if (usr_dispatcher_queue == NULL) {
+    if (!usr_dispatcher_queue_handle) {
         return;
     }
 
@@ -1215,7 +1529,7 @@ static void sys_event_handler(void* arg, esp_event_base_t event_base,
     dispatch_ctx.dispatch_data.event_args.event_data = event_data;
     memcpy(&dispatch_ctx.dispatch_data.event_args.usr_context, arg, sizeof(usr_context_t));
 
-    if (xQueueSend(usr_dispatcher_queue, &dispatch_ctx, portMAX_DELAY) == pdFALSE) {
+    if (xQueueSend(usr_dispatcher_queue_handle, &dispatch_ctx, portMAX_DELAY) == pdFALSE) {
         printf("Error sending message on queue\n");
     }
     return;
@@ -1335,7 +1649,7 @@ static void sys_esp_fill_random(void *buf, size_t len)
 
 static void sys_esp_timer_dispatch_cb(void* arg)
 {
-    if (usr_dispatcher_queue == NULL) {
+    if (!usr_dispatcher_queue_handle) {
         return;
     }
 
@@ -1343,7 +1657,7 @@ static void sys_esp_timer_dispatch_cb(void* arg)
         .event = ESP_SYSCALL_EVENT_ESP_TIMER,
     };
     memcpy(&dispatch_ctx.dispatch_data.esp_timer_args, arg, sizeof(esp_timer_create_args_t));
-    if (xQueueSend(usr_dispatcher_queue, &dispatch_ctx, portMAX_DELAY) == pdFALSE) {
+    if (xQueueSend(usr_dispatcher_queue_handle, &dispatch_ctx, portMAX_DELAY) == pdFALSE) {
         ESP_LOGE(TAG, "Error sending message on queue");
     }
 }
@@ -1366,47 +1680,64 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
         .name = create_args->name,
         .skip_unhandled_events = create_args->skip_unhandled_events,
     };
-    esp_err_t err = esp_timer_create(&sys_create_args, out_handle);
+    esp_timer_handle_t sys_timer_handle = NULL;
+    esp_err_t err = esp_timer_create(&sys_create_args, &sys_timer_handle);
     if (err != ESP_OK) {
         free(usr_args);
     }
+    esp_timer_handle_t wrapper_index = (esp_timer_handle_t)esp_map_add(sys_timer_handle, ESP_MAP_ESP_TIMER_ID);
+    if (!wrapper_index) {
+        esp_timer_delete(sys_timer_handle);
+        free(usr_args);
+        return ESP_ERR_NO_MEM;
+    }
+    *out_handle = wrapper_index;
     return err;
 }
 
 esp_err_t sys_esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
 {
-    if (!is_valid_kdram_addr(timer)) {
+    int wrapper_index = (int)timer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_ESP_TIMER_ID);
+    if (wrapper_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return esp_timer_start_once(timer, timeout_us);
+    return esp_timer_start_once((esp_timer_handle_t)wrapper_handle->handle, timeout_us);
 }
 
 esp_err_t sys_esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period)
 {
-    if (!is_valid_kdram_addr(timer)) {
+    int wrapper_index = (int)timer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_ESP_TIMER_ID);
+    if (wrapper_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return esp_timer_start_periodic(timer, period);
+    return esp_timer_start_periodic((esp_timer_handle_t)wrapper_handle->handle, period);
 }
 
 esp_err_t sys_esp_timer_stop(esp_timer_handle_t timer)
 {
-    if (!is_valid_kdram_addr(timer)) {
+    int wrapper_index = (int)timer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_ESP_TIMER_ID);
+    if (wrapper_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return esp_timer_stop(timer);
+    return esp_timer_stop((esp_timer_handle_t)wrapper_handle->handle);
 }
 
 esp_err_t sys_esp_timer_delete(esp_timer_handle_t timer)
 {
-    if (!is_valid_kdram_addr(timer)) {
+    int wrapper_index = (int)timer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_ESP_TIMER_ID);
+    if (wrapper_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    usr_esp_timer_handle_t *handle = (usr_esp_timer_handle_t *)timer;
+    usr_esp_timer_handle_t *handle = (usr_esp_timer_handle_t *)wrapper_handle->handle;
     void *arg = handle->arg;
-    esp_err_t err = esp_timer_delete(timer);
+    esp_err_t err = esp_timer_delete((esp_timer_handle_t)wrapper_handle->handle);
     if (err == ESP_OK) {
         free(arg);
+        esp_map_remove(wrapper_index);
     }
     return err;
 }
@@ -1423,10 +1754,12 @@ IRAM_ATTR int64_t sys_esp_timer_get_next_alarm(void)
 
 bool sys_esp_timer_is_active(esp_timer_handle_t timer)
 {
-    if (!is_valid_kdram_addr(timer)) {
+    int wrapper_index = (int)timer;
+    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_ESP_TIMER_ID);
+    if (wrapper_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return esp_timer_is_active(timer);
+    return esp_timer_is_active((esp_timer_handle_t)wrapper_handle->handle);
 }
 
 static int64_t IRAM_ATTR sys_esp_system_get_time(void)

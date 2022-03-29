@@ -1,10 +1,13 @@
 if(USER_APP_BUILD)
     set(srcs)
+    set(priv_includes)
 else()
     set(srcs
         "src/syscall_wrappers.c"
         "src/esp_syscalls.c"
-        "src/syscall_handler.S")
+        "src/syscall_handler.S"
+        "src/esp_map.c")
+    set(priv_include "priv_include")
 endif()
 
 set(includes
@@ -15,6 +18,7 @@ set(includes
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
+                    PRIV_INCLUDE_DIRS ${priv_include}
                     REQUIRES esp_wifi nvs_flash esp-tls esp_priv_access)
 
 set(syscallhdr_sh
