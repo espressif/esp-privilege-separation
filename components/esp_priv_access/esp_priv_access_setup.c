@@ -52,13 +52,16 @@ extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
 extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
 extern int _iram_end;
 
+/* User interrupt/exception handler provided while initializing */
 static esp_priv_access_intr_handler_t intr_func;
 
+/* Copy of user app descriptor read from flash */
 static usr_custom_app_desc_t app_desc;
 
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_end, world1_dram);
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_iram_start, (int)&_reserve_w1_iram_end, world1_iram);
 
+/* Enable IRAM permission violation interrupt */
 static void esp_priv_access_iram_int_en(uint8_t int_num)
 {
     permc_ll_iram_enable_int();
@@ -66,6 +69,7 @@ static void esp_priv_access_iram_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_iram_get_int_source_num(), int_num);
 }
 
+/* Enable DRAM permission violation interrupt */
 static void esp_priv_access_dram_int_en(uint8_t int_num)
 {
     permc_ll_dram_enable_int();
@@ -73,6 +77,7 @@ static void esp_priv_access_dram_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_dram_get_int_source_num(), int_num);
 }
 
+/* Enable Flash cache permission violation interrupt */
 static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
 {
     permc_ll_flash_icache_enable_int();
@@ -80,6 +85,7 @@ static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_flash_cache_get_int_source_num(), int_num);
 }
 
+/* Enable PIF bus permission violation interrupt */
 static void esp_priv_access_pif_int_en(uint8_t int_num)
 {
     permc_ll_pif_enable_int();
@@ -87,6 +93,10 @@ static void esp_priv_access_pif_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_pif_get_int_source_num(), int_num);
 }
 
+/* Wrapper permission violation interrupt handler.
+ * It calls protected app registered interrupt handler, if available.
+ * It then cleanly handles the violation and prints information on console
+ */
 static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
 {
     if (esp_ptr_executable(intr_func)) {
@@ -96,6 +106,9 @@ static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
     esp_priv_access_handle_crashed_task();
 }
 
+/* Configure top level permission violation interrupt,
+ * Set WORLD controller monitor registers
+ */
 static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
 {
     wcntl_ll_set_mtvec_base((uint32_t)&_vector_table);
@@ -119,12 +132,14 @@ static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
     return ESP_OK;
 }
 
+/* Configure IROM permissions */
 static void esp_priv_access_irom_config()
 {
     permc_ll_irom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_irom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure IRAM permissions */
 static void esp_priv_access_iram_config()
 {
     permc_ll_icache_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
@@ -147,12 +162,14 @@ static void esp_priv_access_iram_config()
     permc_ll_iram_set_perm(PERMC_AREA_3, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure DROM permissions */
 static void esp_priv_access_drom_config()
 {
     permc_ll_drom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_drom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure DRAM permissions */
 static void esp_priv_access_dram_config()
 {
     permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_dram_start);
@@ -172,6 +189,7 @@ static void esp_priv_access_dram_config()
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure RTC permissions */
 static void esp_priv_access_rtc_config()
 {
     permc_ll_rtc_set_split_line(PERMC_WORLD_0, SOC_RTC_IRAM_LOW);
@@ -185,6 +203,7 @@ static void esp_priv_access_rtc_config()
     permc_ll_rtc_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure Flash cache permissions */
 static IRAM_ATTR void esp_priv_access_flash_cache_config()
 {
     /* Invalidate Cache */
@@ -202,6 +221,7 @@ static IRAM_ATTR void esp_priv_access_flash_cache_config()
     permc_ll_flash_icache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
 }
 
+/* Revoke access to all the peripherals for WORLD1 */
 static void esp_priv_access_revoke_world1_peripheral_permissions(void)
 {
     esp_priv_access_set_periph_perm(PA_UART1, PA_WORLD_1, PA_PERM_NONE);
@@ -378,6 +398,7 @@ IRAM_ATTR esp_err_t esp_priv_access_user_boot()
      return ret;
 }
 
+/* Routine to delete all the user space tasks and free up its memory */
 static void cleanup_user_tasks()
 {
     ets_printf("Cleaning up user tasks\n");
@@ -404,11 +425,13 @@ static void cleanup_user_tasks()
     free(snapshots);
 }
 
+/* Timer callback to boot the user app from esp_timer task (Protected) context */
 static void oneshot_timer_callback(void* arg)
 {
     esp_priv_access_user_boot();
 }
 
+/* Reboot the user app without rebooting the protected app */
 static void reboot_user_app()
 {
     const esp_timer_create_args_t oneshot_timer_args = {
