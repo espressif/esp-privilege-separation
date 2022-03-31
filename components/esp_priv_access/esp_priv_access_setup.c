@@ -52,11 +52,16 @@ extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
 extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
 extern int _iram_end;
 
+/* User interrupt/exception handler provided while initializing */
 static esp_priv_access_intr_handler_t intr_func;
+
+/* Copy of user app descriptor read from flash */
+static usr_custom_app_desc_t app_desc;
 
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_end, world1_dram);
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_iram_start, (int)&_reserve_w1_iram_end, world1_iram);
 
+/* Enable IRAM permission violation interrupt */
 static void esp_priv_access_iram_int_en(uint8_t int_num)
 {
     permc_ll_iram_enable_int();
@@ -64,6 +69,7 @@ static void esp_priv_access_iram_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_iram_get_int_source_num(), int_num);
 }
 
+/* Enable DRAM permission violation interrupt */
 static void esp_priv_access_dram_int_en(uint8_t int_num)
 {
     permc_ll_dram_enable_int();
@@ -71,6 +77,7 @@ static void esp_priv_access_dram_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_dram_get_int_source_num(), int_num);
 }
 
+/* Enable Flash cache permission violation interrupt */
 static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
 {
     permc_ll_flash_icache_enable_int();
@@ -78,6 +85,7 @@ static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_flash_cache_get_int_source_num(), int_num);
 }
 
+/* Enable PIF bus permission violation interrupt */
 static void esp_priv_access_pif_int_en(uint8_t int_num)
 {
     permc_ll_pif_enable_int();
@@ -85,6 +93,10 @@ static void esp_priv_access_pif_int_en(uint8_t int_num)
     intr_matrix_set(PRO_CPU_NUM, permc_ll_pif_get_int_source_num(), int_num);
 }
 
+/* Wrapper permission violation interrupt handler.
+ * It calls protected app registered interrupt handler, if available.
+ * It then cleanly handles the violation and prints information on console
+ */
 static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
 {
     if (esp_ptr_executable(intr_func)) {
@@ -94,6 +106,9 @@ static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
     esp_priv_access_handle_crashed_task();
 }
 
+/* Configure top level permission violation interrupt,
+ * Set WORLD controller monitor registers
+ */
 static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
 {
     wcntl_ll_set_mtvec_base((uint32_t)&_vector_table);
@@ -117,12 +132,14 @@ static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
     return ESP_OK;
 }
 
+/* Configure IROM permissions */
 static void esp_priv_access_irom_config()
 {
     permc_ll_irom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_irom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure IRAM permissions */
 static void esp_priv_access_iram_config()
 {
     permc_ll_icache_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
@@ -145,12 +162,14 @@ static void esp_priv_access_iram_config()
     permc_ll_iram_set_perm(PERMC_AREA_3, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure DROM permissions */
 static void esp_priv_access_drom_config()
 {
     permc_ll_drom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_drom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure DRAM permissions */
 static void esp_priv_access_dram_config()
 {
     permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_dram_start);
@@ -170,6 +189,7 @@ static void esp_priv_access_dram_config()
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure RTC permissions */
 static void esp_priv_access_rtc_config()
 {
     permc_ll_rtc_set_split_line(PERMC_WORLD_0, SOC_RTC_IRAM_LOW);
@@ -183,6 +203,7 @@ static void esp_priv_access_rtc_config()
     permc_ll_rtc_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 }
 
+/* Configure Flash cache permissions */
 static IRAM_ATTR void esp_priv_access_flash_cache_config()
 {
     /* Invalidate Cache */
@@ -200,6 +221,7 @@ static IRAM_ATTR void esp_priv_access_flash_cache_config()
     permc_ll_flash_icache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
 }
 
+/* Revoke access to all the peripherals for WORLD1 */
 static void esp_priv_access_revoke_world1_peripheral_permissions(void)
 {
     esp_priv_access_set_periph_perm(PA_UART1, PA_WORLD_1, PA_PERM_NONE);
@@ -284,8 +306,9 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
     TaskHandle_t handle;
     StaticTask_t *xtaskTCB = NULL;
     StackType_t *xtaskStack = NULL, *kernel_stack = NULL;
-    void *usr_errno = NULL;
+    int *usr_errno = NULL;
     esp_err_t err = ESP_OK;
+    usr_resources_t *user_resources = app_desc.user_app_resources;
 
     if (!is_valid_user_i_addr((void *)user_entry)) {
         ESP_LOGE(TAG, "Incorrect user entry");
@@ -298,9 +321,9 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
         ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
         return ESP_ERR_NO_MEM;
     }
-    xtaskStack = heap_caps_malloc(stack_sz, MALLOC_CAP_WORLD1);
-    if (xtaskStack == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
+    xtaskStack = (StackType_t *)&user_resources->startup_stack;
+    if (!is_valid_udram_addr(xtaskStack)) {
+        ESP_LOGE(TAG, "Invalid user stack..Skipping");
         err = ESP_ERR_NO_MEM;
         goto failure;
     }
@@ -314,18 +337,20 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
 
     memset(kernel_stack, tskSTACK_FILL_BYTE, KERNEL_STACK_SIZE * sizeof( StackType_t ) );
 
-    usr_errno = heap_caps_calloc(1, sizeof(int), MALLOC_CAP_WORLD1);
-    if (usr_errno == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate user errno..Skipping");
+    usr_errno = (int *)&user_resources->startup_errno;
+    if (!is_valid_udram_addr(usr_errno)) {
+        ESP_LOGE(TAG, "Invalid user errno..Skipping");
         err = ESP_ERR_NO_MEM;
         goto failure;
     }
+
+    *usr_errno = 0;
 
     /* Suspend the scheduler to ensure that it does not switch to the newly created task.
      * We need to first set the kernel stack as a TLS and only then it should be executed
      */
     vTaskSuspendAll();
-    handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 0, xtaskStack, xtaskTCB);
+    handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 5, xtaskStack, xtaskTCB);
 
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_KERN_STACK, kernel_stack, NULL);
     vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
@@ -336,9 +361,6 @@ IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t s
 failure:
     if (xtaskTCB) {
         free(xtaskTCB);
-    }
-    if (xtaskStack) {
-        free(xtaskStack);
     }
     if (kernel_stack) {
         free(kernel_stack);
@@ -357,32 +379,6 @@ esp_err_t esp_priv_access_user_set_entry(void *user_entry)
     return ESP_OK;
 }
 
-static void register_heap()
-{
-    usr_custom_app_desc_t app_desc;
-    const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
-
-    if (user_partition == NULL) {
-        ESP_LOGE(TAG, "User code partition not found");
-        return;
-    }
-
-    uint32_t offset = sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t);
-
-    esp_partition_read(user_partition, offset, &app_desc, sizeof(usr_custom_app_desc_t));
-
-    /* Sanity check. user_app_dram_start has to be equal to _reserve_w1_dram_start
-     * If otherwise, probably a case of stale build. assert !
-     */
-    assert(app_desc.user_app_dram_start == (int)&_reserve_w1_dram_start);
-
-    uint32_t w1_caps[] = {MALLOC_CAP_WORLD1, 0, 0};
-    uint32_t w1_heap_size = (int)&_reserve_w1_dram_end - app_desc.user_app_heap_start;
-    heap_caps_add_region_with_caps(w1_caps, app_desc.user_app_heap_start, (int)&_reserve_w1_dram_end);
-
-    ESP_LOGI(TAG, "heap: At %08X len %08X (%d KiB): W1DRAM", app_desc.user_app_heap_start, w1_heap_size, w1_heap_size / 1024);
-}
-
 IRAM_ATTR esp_err_t esp_priv_access_user_boot()
 {
     esp_image_metadata_t user_img_data = {0};
@@ -391,13 +387,18 @@ IRAM_ATTR esp_err_t esp_priv_access_user_boot()
         void *user_entry = (void *)user_img_data.image.entry_addr;
         ret = esp_priv_access_user_set_entry(user_entry);
         if (ret == ESP_OK) {
-            register_heap();
-            ret = esp_priv_access_user_spawn_task(user_entry, 4096);
+            esp_priv_access_load_user_app_desc(&app_desc);
+            /* Sanity check. user_app_dram_start has to be equal to _reserve_w1_dram_start
+             * If otherwise, probably a case of stale build. assert !
+             */
+            assert(app_desc.user_app_dram_start == (int)&_reserve_w1_dram_start);
+            ret = esp_priv_access_user_spawn_task(user_entry, CONFIG_PA_USER_MAIN_TASK_STACK_SIZE);
         }
     }
      return ret;
 }
 
+/* Routine to delete all the user space tasks and free up its memory */
 static void cleanup_user_tasks()
 {
     ets_printf("Cleaning up user tasks\n");
@@ -424,11 +425,13 @@ static void cleanup_user_tasks()
     free(snapshots);
 }
 
+/* Timer callback to boot the user app from esp_timer task (Protected) context */
 static void oneshot_timer_callback(void* arg)
 {
     esp_priv_access_user_boot();
 }
 
+/* Reboot the user app without rebooting the protected app */
 static void reboot_user_app()
 {
     const esp_timer_create_args_t oneshot_timer_args = {

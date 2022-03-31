@@ -26,19 +26,6 @@ index f7e815beff..e50c0db74d 100644
      if (reserved & BIT(interrupt_number)) {
          return true;
      }
-diff --git a/components/heap/include/esp_heap_caps.h b/components/heap/include/esp_heap_caps.h
-index bed3d710bf..b20441103a 100644
---- a/components/heap/include/esp_heap_caps.h
-+++ b/components/heap/include/esp_heap_caps.h
-@@ -41,6 +41,8 @@ extern "C" {
- #define MALLOC_CAP_DEFAULT          (1<<12) ///< Memory can be returned in a non-capability-specific memory allocation (e.g. malloc(), calloc()) call
- #define MALLOC_CAP_IRAM_8BIT        (1<<13) ///< Memory must be in IRAM and allow unaligned access
- #define MALLOC_CAP_RETENTION        (1<<14)
-+#define MALLOC_CAP_WORLD0           (1<<15) ///< Memory must be mapped to WORLD0 memory space
-+#define MALLOC_CAP_WORLD1           (1<<16) ///< Memory must be mapped to WORLD1 memory space
- 
- #define MALLOC_CAP_INVALID          (1<<31) ///< Memory can't be used / list end marker
- 
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
 index 1006d5bea5..c583e1d824 100644
 --- a/components/riscv/vectors.S
@@ -307,20 +294,27 @@ index 0000000000..f4a6fe3724
 +#define World_Controller_EDMA_SHA                               (CPU_PERI_WORLD_CONTROLLER + 0x91C)
 +#define World_Controller_EDMA_ADC_DAC                           (CPU_PERI_WORLD_CONTROLLER + 0x920)
 diff --git a/components/soc/esp32c3/soc_memory_layout.c b/components/soc/esp32c3/soc_memory_layout.c
-index ba0ae819cb..c4c73e9b5b 100644
+index ba0ae819cb..4199a52331 100644
 --- a/components/soc/esp32c3/soc_memory_layout.c
 +++ b/components/soc/esp32c3/soc_memory_layout.c
-@@ -44,6 +44,10 @@ const soc_memory_type_desc_t soc_memory_types[] = {
-     { "IRAM", { MALLOC_CAP_EXEC | MALLOC_CAP_32BIT | MALLOC_CAP_INTERNAL, 0, 0 }, false, false},
-     // Type 4: RTCRAM
-     { "RTCRAM", { MALLOC_CAP_8BIT|MALLOC_CAP_DEFAULT, MALLOC_CAP_INTERNAL|MALLOC_CAP_32BIT, 0 }, false, false},
-+    // Type 5: WORLD0 DRAM
-+    { "W0DRAM", { MALLOC_CAP_WORLD0 | MALLOC_CAP_8BIT, 0, 0 }, false, false},
-+    // Type 6: WORLD1 DRAM
-+    { "W1DRAM", { MALLOC_CAP_WORLD1 | MALLOC_CAP_8BIT, 0, 0 }, false, false},
+@@ -61,7 +61,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
+  *       this list should always be sorted from low to high by start address.
+  *
+  */
+-const soc_memory_region_t soc_memory_regions[] = {
++__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
+     { 0x3FC80000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
+     { 0x3FCA0000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
+     { 0x3FCC0000, 0x20000, 1, 0x403C0000}, //Block 9,  can be used as trace memory
+@@ -70,7 +70,7 @@ const soc_memory_region_t soc_memory_regions[] = {
+ #endif
  };
  
- #ifdef CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
+-const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
++__attribute__((weak)) const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
+ 
+ 
+ extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
 diff --git a/tools/idf_monitor.py b/tools/idf_monitor.py
 index 490178e53a..2ca18c7d04 100755
 --- a/tools/idf_monitor.py

@@ -129,6 +129,13 @@ static inline uint32_t __syscall0(uint32_t syscall_num)
 }
 
 typedef struct {
+    void *stack;
+    int stack_size;
+    void *task_errno;
+    void *task_handle;
+} usr_task_ctx_t;
+
+typedef struct {
     void *usr_event_handler;
     void *usr_args;
     void *event_handler_instance;

@@ -1,5 +1,7 @@
 #include "sdkconfig.h"
 
+#define ROM_DRAM_RESERVE_START          0x3FCDF060
+
 SECTIONS
 {
     .reserve_w1_iram (NOLOAD) :
@@ -27,11 +29,11 @@ SECTIONS
 #if CONFIG_PA_MEMORY_ALLOCATE_PROTECTED
         _reserve_w1_dram_start = ABSOLUTE(_data_start + CONFIG_PA_ALLOCATE_DRAM_SIZE);
 #elif CONFIG_PA_MEMORY_ALLOCATE_USER
-        _reserve_w1_dram_start = ABSOLUTE(0x3FCDF060 - CONFIG_PA_ALLOCATE_DRAM_SIZE);
+        _reserve_w1_dram_start = ABSOLUTE(ROM_DRAM_RESERVE_START - CONFIG_PA_ALLOCATE_DRAM_SIZE);
 #endif
         /* Align the starting boundary to 512 bytes as it is a requirement for the PMS split line */
         _reserve_w1_dram_start = ABSOLUTE((_reserve_w1_dram_start + 0x200 - 1) & ~(0x200 - 1));
-        _reserve_w1_dram_end = ABSOLUTE(0x3FCDF060);
+        _reserve_w1_dram_end = ABSOLUTE(ROM_DRAM_RESERVE_START);
     } > dram0_0_seg
 
   ASSERT((_heap_start <= _reserve_w1_dram_start),
