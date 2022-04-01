@@ -52,6 +52,9 @@ extern int _reserve_w1_dram_start, _reserve_w1_dram_end;
 extern int _reserve_w1_iram_start, _reserve_w1_iram_end;
 extern int _iram_end;
 
+/* API to start user task */
+extern esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, usr_custom_app_desc_t *app_desc);
+
 /* User interrupt/exception handler provided while initializing */
 static esp_priv_access_intr_handler_t intr_func;
 
@@ -303,69 +306,7 @@ esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
 
 IRAM_ATTR esp_err_t esp_priv_access_user_spawn_task(void *user_entry, uint32_t stack_sz)
 {
-    TaskHandle_t handle;
-    StaticTask_t *xtaskTCB = NULL;
-    StackType_t *xtaskStack = NULL, *kernel_stack = NULL;
-    int *usr_errno = NULL;
-    esp_err_t err = ESP_OK;
-    usr_resources_t *user_resources = app_desc.user_app_resources;
-
-    if (!is_valid_user_i_addr((void *)user_entry)) {
-        ESP_LOGE(TAG, "Incorrect user entry");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    ESP_LOGI(TAG, "User entry point: %p", user_entry);
-    xtaskTCB = heap_caps_malloc(sizeof(StaticTask_t), portTcbMemoryCaps);
-    if (xtaskTCB == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate user space..Skipping");
-        return ESP_ERR_NO_MEM;
-    }
-    xtaskStack = (StackType_t *)&user_resources->startup_stack;
-    if (!is_valid_udram_addr(xtaskStack)) {
-        ESP_LOGE(TAG, "Invalid user stack..Skipping");
-        err = ESP_ERR_NO_MEM;
-        goto failure;
-    }
-
-    kernel_stack = heap_caps_malloc(KERNEL_STACK_SIZE, portStackMemoryCaps);
-    if (kernel_stack == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate kernel stack..Skipping");
-        err = ESP_ERR_NO_MEM;
-        goto failure;
-    }
-
-    memset(kernel_stack, tskSTACK_FILL_BYTE, KERNEL_STACK_SIZE * sizeof( StackType_t ) );
-
-    usr_errno = (int *)&user_resources->startup_errno;
-    if (!is_valid_udram_addr(usr_errno)) {
-        ESP_LOGE(TAG, "Invalid user errno..Skipping");
-        err = ESP_ERR_NO_MEM;
-        goto failure;
-    }
-
-    *usr_errno = 0;
-
-    /* Suspend the scheduler to ensure that it does not switch to the newly created task.
-     * We need to first set the kernel stack as a TLS and only then it should be executed
-     */
-    vTaskSuspendAll();
-    handle = xTaskCreateStatic(user_entry, "User main task", stack_sz, NULL, 5, xtaskStack, xtaskTCB);
-
-    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_KERN_STACK, kernel_stack, NULL);
-    vTaskSetThreadLocalStoragePointerAndDelCallback(handle, ESP_PA_TLS_OFFSET_ERRNO, usr_errno, NULL);
-
-    xTaskResumeAll();
-    return err;
-
-failure:
-    if (xtaskTCB) {
-        free(xtaskTCB);
-    }
-    if (kernel_stack) {
-        free(kernel_stack);
-    }
-    return err;
+    return esp_syscall_spawn_user_task(user_entry, stack_sz, &app_desc);
 }
 
 esp_err_t esp_priv_access_user_set_entry(void *user_entry)

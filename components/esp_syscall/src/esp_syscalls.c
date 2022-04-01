@@ -1434,6 +1434,23 @@ static int64_t IRAM_ATTR sys_esp_system_get_time(void)
     return esp_system_get_time();
 }
 
+IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, usr_custom_app_desc_t *app_desc)
+{
+    usr_task_ctx_t task_ctx = {};
+    usr_resources_t *user_resources = app_desc->user_app_resources;
+
+    ESP_LOGI(TAG, "User entry point: %p", user_entry);
+
+    task_ctx.stack = (StackType_t *)&user_resources->startup_stack;
+    task_ctx.stack_size = stack_sz;
+    task_ctx.task_errno = (int *)&user_resources->startup_errno;
+    int ret = sys_xTaskCreate(user_entry, "User main task", NULL, 5, 0, &task_ctx);
+    if (ret == pdPASS) {
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
