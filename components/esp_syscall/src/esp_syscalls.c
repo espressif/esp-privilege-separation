@@ -1784,6 +1784,16 @@ IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, 
     return ESP_FAIL;
 }
 
+#ifdef CONFIG_ESP_SYSCALL_VERIFY_RETURNED_POINTERS
+IRAM_ATTR void sys_verify_returned_ptr(void *ptr, int syscall_num)
+{
+    if (is_valid_kdram_addr(ptr)) {
+        ESP_EARLY_LOGE(TAG, "Raw kernel pointer returned by syscall %d. Aborting...", syscall_num);
+        abort();
+    }
+}
+#endif
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif

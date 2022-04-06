@@ -114,12 +114,31 @@ __ecall_handler:
     li      t2, __NR_syscalls
     bgt     a7, t2, .skip_syscall
 
+#ifdef CONFIG_ESP_SYSCALL_VERIFY_RETURNED_POINTERS
+    /* Save syscall number in s2 */
+    mv      s2, a7
+#endif
+
     la      t3, syscall_table
     slli    t4, a7, 2
     add     t3, t3, t4
     lw      t3, 0x0(t3)
 
     jalr    t3
+
+#ifdef CONFIG_ESP_SYSCALL_VERIFY_RETURNED_POINTERS
+    /* Load a0 and a1 with arguments for sys_verify_returned_ptr */
+    mv      s3, a0
+    mv      s4, a1
+    mv      a1, s2
+    la      t3, sys_verify_returned_ptr
+
+    jalr    t3
+
+    /* Load actual values returned from syscall */
+    mv      a0, s3
+    mv      a1, s4
+#endif
 
 .skip_syscall:
    /* Disable interrupts and restore user space */

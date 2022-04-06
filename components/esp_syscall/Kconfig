@@ -1,0 +1,10 @@
+menu "ESP Syscall"
+
+    config ESP_SYSCALL_VERIFY_RETURNED_POINTERS
+    bool "Verify that raw kernel pointers are not returned to user app"
+    default n
+    help
+        Protected app implements shim layer to wrap raw pointers.
+        Enable this config to verify that a raw kernel pointer is not returned to user space.
+
+endmenu
