@@ -71,3 +71,18 @@ For example, we have encapsulated the existing ESP-IDF SPI driver here :componen
 The system calls for file operation functions (open, etc) are already implemented so there is no need to register
 any extra system calls. Registering the VFS peripheral driver from the protected application is enough and user
 application can use it by simply calling the file system functions with the appropriate path.
+
+Separate heap allocators
+------------------------
+
+There are two separate instances of heap allocators:
+
+1. Protected space heap allocator managing protected space heap
+
+2. User space heap allocator managing user space heap
+
+Both these heap allocators have no knowledge of their counterpart. The reason for separating heap allocators is to ensure
+that any corruption in the user space heap does not affect the functionality of the protected app.
+
+If in case a system call requires allocating memory in user space then it is the responsibilty of the user space to allocate the
+memory and pass the memory block as a system call argument.

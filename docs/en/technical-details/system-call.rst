@@ -37,6 +37,8 @@ Structure of a simple system call can be described as follows:
 *List of supported system calls can be
 found*  \ :component_file:`here <../components/esp_syscall/syscall/syscall.tbl>`.
 
+.. _adding_system_call:
+
 Adding custom system call
 -------------------------
 
