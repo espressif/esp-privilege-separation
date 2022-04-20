@@ -54,6 +54,8 @@ extern int _iram_end;
 
 /* API to start user task */
 extern esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, usr_custom_app_desc_t *app_desc);
+/* API to cleanup user resources */
+extern void esp_syscall_clear_user_resourses(void);
 
 /* User interrupt/exception handler provided while initializing */
 static esp_priv_access_intr_handler_t intr_func;
@@ -339,13 +341,14 @@ IRAM_ATTR esp_err_t esp_priv_access_user_boot()
      return ret;
 }
 
-/* Routine to delete all the user space tasks and free up its memory */
-static void cleanup_user_tasks()
+/* Routine to suspend all the user space tasks */
+static void suspend_user_tasks()
 {
-    ets_printf("Cleaning up user tasks\n");
+    ets_printf("Suspending user tasks\n");
     TaskHandle_t handle = NULL;
     TaskSnapshot_t *snapshots = NULL;
     uint32_t task_count = uxTaskGetNumberOfTasks();
+    /* Calloc is called from ISR context and can fail in some scenarios */
     snapshots = calloc(task_count, sizeof(TaskSnapshot_t));
     if (!snapshots) {
         ets_printf("Not enough memory to store task snapshots\n");
@@ -360,8 +363,8 @@ static void cleanup_user_tasks()
             // Keep it as it is
             continue;
         }
-        ets_printf("Deleting user task: %s\n", pcTaskGetTaskName(handle));
-        vTaskDelete(handle);
+        ets_printf("Suspending user task: %s\n", pcTaskGetTaskName(handle));
+        vTaskSuspend(handle);
     }
     free(snapshots);
 }
@@ -369,6 +372,7 @@ static void cleanup_user_tasks()
 /* Timer callback to boot the user app from esp_timer task (Protected) context */
 static void oneshot_timer_callback(void* arg)
 {
+    esp_syscall_clear_user_resourses();
     esp_priv_access_user_boot();
 }
 
@@ -383,12 +387,12 @@ static void reboot_user_app()
     esp_timer_handle_t oneshot_timer;
     esp_timer_create(&oneshot_timer_args, &oneshot_timer);
 
-    esp_timer_start_once(oneshot_timer, 1*1000*1000);
+    esp_timer_start_once(oneshot_timer, 0);
 }
 
 IRAM_ATTR void esp_priv_access_user_reboot()
 {
-    cleanup_user_tasks();
+    suspend_user_tasks();
     reboot_user_app();
 }
 

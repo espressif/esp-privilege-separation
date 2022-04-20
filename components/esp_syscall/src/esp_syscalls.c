@@ -1474,6 +1474,7 @@ static esp_err_t sys_gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
     usr_gpio_args_t *usr_context = (usr_gpio_args_t *)wrapper_handle->handle;
     ret = gpio_isr_handler_remove(usr_context->gpio_num);
     if (ret == ESP_OK) {
+        gpio_uninstall_isr_service();
         free(usr_context);
         esp_map_remove(wrapper_index);
     }
@@ -1782,6 +1783,56 @@ IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, 
         return ESP_OK;
     }
     return ESP_FAIL;
+}
+
+void esp_syscall_clear_user_resourses(void)
+{
+    int user_handles = esp_map_get_allocated_size();
+    usr_dispatcher_queue_index = 0;
+    usr_dispatcher_queue_handle = NULL;
+    usr_mem_cleanup_queue_index = 0;
+    usr_mem_cleanup_queue_handle = NULL;
+    ESP_LOGI(TAG, "Deleting user_app resources");
+    for (int i = ESP_MAP_INDEX_OFFSET; i < (ESP_MAP_INDEX_OFFSET + user_handles); i++) {
+        esp_map_handle_t *wrapper_handle = esp_map_get_handle(i);
+        if (!wrapper_handle) {
+            continue;
+        }
+        switch (ESP_MAP_GET_ID(wrapper_handle)) {
+            case ESP_MAP_QUEUE_ID:
+                vQueueDelete((QueueHandle_t)wrapper_handle->handle);
+                esp_map_remove(i);
+                break;
+
+            case ESP_MAP_TASK_ID:
+                vTaskDelete((TaskHandle_t)wrapper_handle->handle);
+                break;
+
+            case ESP_MAP_ESP_TIMER_ID:
+                esp_timer_stop((esp_timer_handle_t)wrapper_handle->handle);
+                esp_timer_delete((esp_timer_handle_t)wrapper_handle->handle);
+                esp_map_remove(i);
+                break;
+
+            case ESP_MAP_XTIMER_ID:
+                xTimerDelete((TimerHandle_t)wrapper_handle->handle, 0);
+                esp_map_remove(i);
+                break;
+
+            case ESP_MAP_EVENT_GROUP_ID:
+                vEventGroupDelete((EventGroupHandle_t)wrapper_handle->handle);
+                esp_map_remove(i);
+                break;
+
+            case ESP_MAP_GPIO_ID:
+                sys_gpio_softisr_handler_remove((usr_gpio_handle_t)i);
+                break;
+
+            default:
+                ESP_EARLY_LOGW(TAG, "Map ID 0x%x not checked", ESP_MAP_GET_ID(wrapper_handle));
+                break;
+        }
+    }
 }
 
 #ifdef CONFIG_ESP_SYSCALL_VERIFY_RETURNED_POINTERS
