@@ -15,8 +15,18 @@
 #pragma once
 
 #include <stdbool.h>
+#include "esp_idf_version.h"
 #include "soc/soc.h"
 #include "sdkconfig.h"
+
+#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 0))
+#define IDF_VERSION_V4_3
+#undef IDF_VERSION_V4_4
+#elif (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))
+#undef IDF_VERSION_V4_3
+#define IDF_VERSION_V4_4
+#endif
+
 
 /* WORLD1 range */
 #define SOC_UDROM_LOW    0x3C400000

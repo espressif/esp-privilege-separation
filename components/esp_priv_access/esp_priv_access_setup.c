@@ -33,7 +33,11 @@
 #include "wcntl_ll.h"
 #include "soc/periph_defs.h"
 #include "hal/memprot_ll.h"
+#if defined(IDF_VERSION_V4_3)
 #include "esp32c3/memprot.h"
+#elif defined(IDF_VERSION_V4_4)
+#include "esp_memprot.h"
+#endif
 #include "esp32c3/rom/cache.h"
 #include "esp_heap_caps_init.h"
 
@@ -276,10 +280,22 @@ static void esp_priv_access_revoke_world1_peripheral_permissions(void)
 
 esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
 {
+#ifdef CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
+#if defined(IDF_VERSION_V4_3)
     if (esp_memprot_is_locked_any()) {
+#elif defined(IDF_VERSION_V4_4)
+    bool mprot_status = false;
+    esp_err_t err = esp_mprot_is_conf_locked_any(&mprot_status);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to check PMS setting lock, 0x%x", err);
+        return ESP_FAIL;
+    }
+    if (mprot_status) {
+#endif
         ESP_LOGE(TAG, "Permission registers already configured");
         return ESP_FAIL;
     }
+#endif
 
     esp_priv_access_int_init(fn);
 
