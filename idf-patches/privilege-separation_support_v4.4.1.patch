@@ -1,10 +1,10 @@
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
-index 296427721a..fae596b796 100644
+index 5d1b9ce8d1..b40c491651 100644
 --- a/components/esp32c3/Kconfig
 +++ b/components/esp32c3/Kconfig
-@@ -252,4 +252,14 @@ menu "ESP32C3-Specific"
-             This option provides a software workaround for this issue. Configure to isolate all
-             GPIO pins in sleep state.
+@@ -184,4 +184,14 @@ menu "ESP32C3-Specific"
+             If enabled, this disables the linking of binary libraries in the application build. Note
+             that after enabling this Wi-Fi/Bluetooth will not work.
  
 +    config ESP_PRIVILEGE_SEPARATION_ENABLE
 +        bool "Enable privilege separation using WORLD controller"
@@ -30,8 +30,30 @@ index f7e815beff..e50c0db74d 100644
      if (reserved & BIT(interrupt_number)) {
          return true;
      }
+diff --git a/components/heap/port/esp32c3/memory_layout.c b/components/heap/port/esp32c3/memory_layout.c
+index 3ca3272417..ff5266d5f1 100644
+--- a/components/heap/port/esp32c3/memory_layout.c
++++ b/components/heap/port/esp32c3/memory_layout.c
+@@ -61,7 +61,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
+  *       this list should always be sorted from low to high by start address.
+  *
+  */
+-const soc_memory_region_t soc_memory_regions[] = {
++__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
+     { 0x3FC80000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
+     { 0x3FCA0000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
+     { 0x3FCC0000, 0x20000, 1, 0x403C0000}, //Block 9,  can be used as trace memory
+@@ -70,7 +70,7 @@ const soc_memory_region_t soc_memory_regions[] = {
+ #endif
+ };
+ 
+-const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
++__attribute__((weak)) const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
+ 
+ 
+ extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
-index 2e1c7c477f..7c5b87b418 100644
+index 1006d5bea5..c583e1d824 100644
 --- a/components/riscv/vectors.S
 +++ b/components/riscv/vectors.S
 @@ -16,9 +16,26 @@
@@ -297,35 +319,13 @@ index 0000000000..f4a6fe3724
 +#define World_Controller_EDMA_AES                               (CPU_PERI_WORLD_CONTROLLER + 0x918)
 +#define World_Controller_EDMA_SHA                               (CPU_PERI_WORLD_CONTROLLER + 0x91C)
 +#define World_Controller_EDMA_ADC_DAC                           (CPU_PERI_WORLD_CONTROLLER + 0x920)
-diff --git a/components/soc/esp32c3/soc_memory_layout.c b/components/soc/esp32c3/soc_memory_layout.c
-index ba0ae819cb..4199a52331 100644
---- a/components/soc/esp32c3/soc_memory_layout.c
-+++ b/components/soc/esp32c3/soc_memory_layout.c
-@@ -61,7 +61,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
-  *       this list should always be sorted from low to high by start address.
-  *
-  */
--const soc_memory_region_t soc_memory_regions[] = {
-+__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
-     { 0x3FC80000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
-     { 0x3FCA0000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
-     { 0x3FCC0000, 0x20000, 1, 0x403C0000}, //Block 9,  can be used as trace memory
-@@ -70,7 +70,7 @@ const soc_memory_region_t soc_memory_regions[] = {
- #endif
- };
+diff --git a/tools/idf_monitor_base/gdbhelper.py b/tools/idf_monitor_base/gdbhelper.py
+index f32d4fb688..55d7dda1fc 100644
+--- a/tools/idf_monitor_base/gdbhelper.py
++++ b/tools/idf_monitor_base/gdbhelper.py
+@@ -103,6 +103,11 @@ class GDBHelper:
  
--const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
-+__attribute__((weak)) const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
- 
- 
- extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
-diff --git a/tools/idf_monitor.py b/tools/idf_monitor.py
-index 490178e53a..2ca18c7d04 100755
---- a/tools/idf_monitor.py
-+++ b/tools/idf_monitor.py
-@@ -854,6 +854,11 @@ class Monitor(object):
-     def process_panic_output(self, panic_output):
-         panic_output_decode_script = os.path.join(os.path.dirname(__file__), '..', 'tools', 'gdb_panic_server.py')
+     def process_panic_output(self, panic_output, logger, target):  # type: (bytes, Logger, str) -> None
          panic_output_file = None
 +        user_app = os.path.dirname(self.elf_file) + '/user_app/user_app.elf'
 +        if os.path.isfile(user_app):
@@ -335,19 +335,19 @@ index 490178e53a..2ca18c7d04 100755
          try:
              # On Windows, the temporary file can't be read unless it is closed.
              # Set delete=False and delete the file manually later.
-@@ -864,6 +869,7 @@ class Monitor(object):
+@@ -112,6 +117,7 @@ class GDBHelper:
              cmd = [self.toolchain_prefix + 'gdb',
                     '--batch', '-n',
                     self.elf_file,
 +                   '-ex', user_symbols,
                     '-ex', "target remote | \"{python}\" \"{script}\" --target {target} \"{output_file}\""
-                    .format(python=sys.executable,
-                            script=panic_output_decode_script,
+                        .format(python=sys.executable,
+                                script=PANIC_OUTPUT_DECODE_SCRIPT,
 diff --git a/tools/idf_py_actions/tools.py b/tools/idf_py_actions/tools.py
-index 688223ff3a..cd7abc2f03 100644
+index c9ee08fd04..5c8a2861e5 100644
 --- a/tools/idf_py_actions/tools.py
 +++ b/tools/idf_py_actions/tools.py
-@@ -199,6 +199,7 @@ def ensure_build_directory(args, prog_name, always_run_cmake=False):
+@@ -205,6 +205,7 @@ def ensure_build_directory(args, prog_name, always_run_cmake=False):
          try:
              cmake_args = [
                  'cmake',
