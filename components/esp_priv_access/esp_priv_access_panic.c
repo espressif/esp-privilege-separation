@@ -142,7 +142,7 @@ IRAM_ATTR void esp_priv_access_handle_crashed_task(void)
     portYIELD_FROM_ISR();
 #elif CONFIG_PA_RESTART_USER_APP
     esp_priv_access_user_reboot();
-    ets_printf("Restarting user_app...\n");
+    ets_printf("Preparing to restart user_app...\n");
     ets_printf("=================================================\n");
     portYIELD_FROM_ISR();
 #elif CONFIG_PA_REBOOT_ENTIRE_SYSTEM

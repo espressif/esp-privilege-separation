@@ -121,7 +121,23 @@ if __name__ == '__main__':
             'Illegal DRAM access:',
             'Illegal RTC access:',
             'Illegal Peripheral access:',
-            'Illegal Flash Icache access:'
+            'Illegal Flash Icache access:',
+            'Failed to take semaphore with handle = 0x1',
+            'Failed to give semaphore with handle = 0x1',
+            'Failed to give semaphore with handle = handle + 4',
+            'Failed to take semaphore with handle = handle - 4',
+            'Semaphore handle manipulation test complete',
+            'Failed to get priority with handle = handle - 4',
+            'Failed to get stack watermark with handle = handle + 1',
+            'Task handle manipulation test complete',
+            'Failed to create esp_timer with handle = handle - 4',
+            'Failed to stop esp_timer with handle = handle + 4',
+            'Failed to delete esp_timer_handle with handle = 0x1',
+            'ESP-Timer handle manipulation test complete',
+            'Failed to start xTimer for handle = SemaphoreHandle_t',
+            'Failed to stop xTimer for handle = handle - 4',
+            'Failed to delete xTimer for handle = SemaphoreHandle_t',
+            'xTimer handle manipulation test complete'
             ]
 
     for line in expected_output:

@@ -44,6 +44,7 @@ typedef enum {
     ESP_PA_TLS_OFFSET_KERN_STACK,
     ESP_PA_TLS_OFFSET_WORLD,
     ESP_PA_TLS_OFFSET_ERRNO,
+    ESP_PA_TLS_OFFSET_SHIM_HANDLE,
 } esp_priv_access_tls_offset;
 
 typedef struct {
