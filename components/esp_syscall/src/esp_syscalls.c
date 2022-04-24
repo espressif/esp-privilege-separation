@@ -512,21 +512,53 @@ static TaskHandle_t sys_xTaskGetIdleTaskHandle(void)
 
 static UBaseType_t sys_uxTaskGetStackHighWaterMark(TaskHandle_t xTask)
 {
+#if (INCLUDE_uxTaskGetStackHighWaterMark == 1)
+    /* uxTaskGetStackHighWaterMark is a system call in user space and we switch the stack to kernel stack
+     * when servicing a system call. If we call `uxTaskGetStackHighWaterMark` here, it will give us the high watermark for
+     * kernel space stack which is incorrect as the user expects the high watermark for the user space stack. So we
+     * manually calculate the high watermark here
+     */
+    TaskHandle_t handle;
     if (xTask == NULL) {
-        return uxTaskGetStackHighWaterMark(NULL);
+        handle = xTaskGetCurrentTaskHandle();
+    } else {
+        int wrapper_index = (int)xTask;
+        esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
+        if (wrapper_handle == NULL) {
+            return -1;
+        }
+        handle = (TaskHandle_t)wrapper_handle->handle;
     }
-    int wrapper_index = (int)xTask;
-    esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
-    if (wrapper_handle == NULL) {
-        return -1;
+
+    uint32_t high_watermark = 0U;
+
+    const uint8_t *stackstart = pxTaskGetStackStart(handle);
+
+    if (is_valid_kdram_addr((void *)stackstart)) {
+        /* High watermark can be queried for a task executing system-call, in that case, the stack will point to kernel stack.
+         * Retrieve the user stack from system call stack frame
+         */
+        RvEcallFrame *syscall_stack = (RvEcallFrame *)((uint32_t)stackstart + KERNEL_STACK_SIZE - RV_ESTK_FRMSZ);
+        stackstart = (const uint8_t *)syscall_stack->stack;
     }
-    return uxTaskGetStackHighWaterMark((TaskHandle_t)wrapper_handle->handle);
+
+    while (*stackstart == (uint8_t)tskSTACK_FILL_BYTE) {
+        stackstart -= portSTACK_GROWTH;
+        high_watermark++;
+    }
+
+    high_watermark /= (uint32_t)sizeof(StackType_t);
+
+    return (configSTACK_DEPTH_TYPE)high_watermark;
+#else
+    return -1;
+#endif
 }
 
 static eTaskState sys_eTaskGetState(TaskHandle_t xTask)
 {
     if (xTask == NULL) {
-        return uxTaskGetStackHighWaterMark(NULL);
+        return -1;
     }
     int wrapper_index = (int)xTask;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
