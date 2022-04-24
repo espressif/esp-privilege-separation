@@ -188,6 +188,7 @@ __ecall_handler:
     la      t2, WORLD_CONTROL_CORE_X_WORLD_UPDATE(0)
     // t3 already has value 1 stored, use it
     sw      t3, 0x00(t2)
+    fence
 
     /* Switch to user stack */
     lw      t2, RV_ESTK_SP(sp)
