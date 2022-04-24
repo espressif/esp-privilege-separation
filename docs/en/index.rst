@@ -13,12 +13,12 @@ ESP Privilege Separation is an approach to separate out traditional monolithic R
 Features
 --------
 
-- Two separate independent firmware binaries generated at build time
-- Protected application contains operating system, networking stack, device drivers and hence does bulk of the heavy lifting. Developers can add any custom modules to the protected application as per their needs
-- User application is very thin. It typically implements the business logic, and it avails of the various services by primarily using the system call based interface exposed by the protected app
-- The protected app can configure the entire memory space and peripheral access at run-time, based on the requirement
-- Any exception within the user application does not hamper the functionality of the protected app
-- The user-kernel boundary is configurable. Developers can move certain modules within or outside the kernel space easily
+- Two separate independent firmware binaries generated at build time.
+- Protected application contains operating system, networking stack, device drivers and hence does bulk of the heavy lifting. Developers can add any custom modules to the protected application as per their needs.
+- User application is very thin. It typically implements the business logic, and it avails of the various services by primarily using the system call based interface exposed by the protected app.
+- The protected app can configure the entire memory space and peripheral access at run-time, based on the requirement.
+- Any exception within the user application does not hamper the functionality of the protected app.
+- The user-kernel boundary is configurable. Developers can move certain modules within or outside the kernel space easily.
 
 Future Work
 -----------

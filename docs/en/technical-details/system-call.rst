@@ -97,8 +97,7 @@ Define the wrapper function which can be called from user application:
 system call table. This macro is generated from a script and is placed
 in ``syscall_def.h`` file, created during build process.
 
-``EXECUTE_SYSCALL`` is a macro defined in :component_file:
-`syscall_priv.h <../components/esp_syscall/src/syscall_priv.h>` file.
+``EXECUTE_SYSCALL`` is a macro defined in :component_file:`syscall_priv.h <../components/esp_syscall/src/syscall_priv.h>` file.
 
 .. _3-protected-system-call-implementation:
 

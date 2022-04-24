@@ -8,8 +8,8 @@ Use actual documentation generated within about 20 minutes on each commit:
 
 # Building Documentation
 
-The documentation is built using the python package esp-docs, which can be installed by running `pip install esp-docs`. Running `build-docs --help` will give a summary of available options. For more information see the esp-docs documentation at https://github.com/espressif/esp-docs/blob/master/README.md
+* Install `doxygen` on your platform.
+* Install the python dependencies `python -m pip install -r requirements.txt`.
+* Build docs for ESP32-C3 by running `build-docs -t esp32c3 -l en`.
 
-To build docs for ESP32-C3, run command `build-docs -t esp32c3 -l en`
-
-In case you face an error relating to `cairo` or `libcairo-2` library not found, please install package through the corresponding package manager
+In case you face an error relating to `cairo` or `libcairo-2` library not found, please install this package through the corresponding package manager.

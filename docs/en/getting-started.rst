@@ -33,17 +33,17 @@ Any Privilege Separation project contains the following elements:
   how to build the project. Apart from the ESP-IDF components, we include the additional components of ``esp-privilege-separation`` and
   ``protected_app`` by setting the ``EXTRA_COMPONENT_DIRS`` variable. This is required because this framework does not have a ``main``
   component which is typically automatically added by the ESP-IDF build system.
-- The build-system generated ``sdkconfig`` project configuration file that  holds the configuration of the entire project. It contains the
+- The build-system generated ``sdkconfig`` project configuration file that holds the configuration of the entire project, contains the
   configuration for protected as well as the user app.
-- ``protected_app`` is protected space application. It contains ``main`` component of the protected application.
+- ``protected_app`` is the protected space application. It contains ``main`` component of the protected application.
   Code contained inside this directory executes under the protected space (higher privilege).
 - ``user_app`` is the user space application. It is built as an external project to the protected app.
   It is similar to an independent ESP-IDF project and contains a top level CMakeLists.txt to build the ``user_app``.
   Code contained inside this directory executes under the user space.
 - ``partitions.csv`` file specifies the partitions and the space reserved for protected app and user app.
   User app needs to have the partition name as ``user_app`` with type ``app`` and sub-type ``0xFF``.
-- ``build`` directory which is created when the project is built and it contains the build output of the project.
-  It contains the ELFs and BINs of protected and user apps.
+- ``build`` directory is created when the project is built and contains the build artifacts of the project,
+  such as the ELFs and BINs of the protected and the user apps.
 
 Writing a sample application
 ----------------------------
@@ -59,7 +59,7 @@ Protected application
 
 The protected application is equivalent to any ESP-IDF application. You can use any component from ESP-IDF or otherwise, as it is.
 Additionally, the protected application is tasked with configuring and booting the user application. This is achieved by using
-the ``esp_priv_access`` component APIs.
+the :doc:`esp_priv_access<api-reference/esp_priv_access>` component APIs.
 
 ::
 
