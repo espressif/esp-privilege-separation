@@ -142,8 +142,8 @@
 1026  common  esp_event_loop_create_default           sys_esp_event_loop_create_default
 1027  common  esp_netif_create_default_wifi_sta       sys_esp_netif_create_default_wifi_sta
 
-1028  custom  esp_event_handler_instance_register     sys_esp_event_handler_instance_register
-1029  custom  esp_event_handler_instance_unregister   sys_esp_event_handler_instance_unregister
+1028  common  esp_event_handler_instance_register     sys_esp_event_handler_instance_register
+1029  common  esp_event_handler_instance_unregister   sys_esp_event_handler_instance_unregister
 1030  common  esp_wifi_init                           sys_esp_wifi_init
 1031  common  esp_wifi_set_mode                       sys_esp_wifi_set_mode
 1032  common  esp_wifi_set_config                     sys_esp_wifi_set_config

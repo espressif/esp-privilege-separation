@@ -55,6 +55,21 @@
 
 #define TAG     __func__
 
+typedef void (*syscall_t)(void);
+
+/* These are the indexes in esp_event_map_arr to store the user space EVENT base.
+ * This is required because esp_event_base_t is a string pointer and it is different for protected space
+ * as well as user space, so if the user wants to register an event handler for an event handled in protected space,
+ * we need to create a mapping for these string pointers and translate them
+ */
+typedef enum {
+    WIFI_EVENT_INDEX = 0,
+    IP_EVENT_INDEX,
+    ESP_EVENT_MAX_INDEX
+} esp_event_index_t;
+
+static esp_event_base_t esp_event_map_arr[ESP_EVENT_MAX_INDEX];
+
 static DRAM_ATTR int usr_dispatcher_queue_index;
 static DRAM_ATTR int usr_mem_cleanup_queue_index;
 
@@ -1566,11 +1581,11 @@ void sys_event_handler(void* arg, esp_event_base_t event_base,
     };
 
     if (event_base == WIFI_EVENT) {
-        dispatch_ctx.dispatch_data.event_args.event_base = WIFI_EVENT_BASE;
+        dispatch_ctx.dispatch_data.event_args.event_base = esp_event_map_arr[WIFI_EVENT_INDEX];
     } else if (event_base == IP_EVENT) {
-        dispatch_ctx.dispatch_data.event_args.event_base = IP_EVENT_BASE;
+        dispatch_ctx.dispatch_data.event_args.event_base = esp_event_map_arr[IP_EVENT_INDEX];
     } else {
-        dispatch_ctx.dispatch_data.event_args.event_base = -1;
+        dispatch_ctx.dispatch_data.event_args.event_base = event_base;
     }
 
     dispatch_ctx.dispatch_data.event_args.event_id = event_id;
@@ -1583,23 +1598,22 @@ void sys_event_handler(void* arg, esp_event_base_t event_base,
     return;
 }
 
-esp_err_t sys_esp_event_handler_instance_register(usr_esp_event_base_t event_base,
+esp_err_t sys_esp_event_handler_instance_register(esp_event_base_t event_base,
                                               int32_t event_id,
                                               esp_event_handler_t event_handler,
                                               void *event_handler_arg,
-                                              usr_esp_event_handler_instance_t *context)
+                                              esp_event_handler_instance_t *context)
 {
     esp_err_t ret;
     esp_event_base_t sys_event_base;
-    switch(event_base) {
-        case WIFI_EVENT_BASE:
-            sys_event_base = WIFI_EVENT;
-            break;
-        case IP_EVENT_BASE:
-            sys_event_base = IP_EVENT;
-            break;
-        default:
-            return ESP_ERR_INVALID_ARG;
+    if (strncmp(WIFI_EVENT, event_base, strlen(WIFI_EVENT)) == 0) {
+        sys_event_base = WIFI_EVENT;
+        esp_event_map_arr[WIFI_EVENT_INDEX] = event_base;
+    } else if (strncmp(IP_EVENT, event_base, strlen(IP_EVENT)) == 0) {
+        sys_event_base = IP_EVENT;
+        esp_event_map_arr[IP_EVENT_INDEX] = event_base;
+    } else {
+        sys_event_base = event_base;
     }
 
     if (!(is_valid_udram_addr(context))) {
@@ -1624,21 +1638,18 @@ esp_err_t sys_esp_event_handler_instance_register(usr_esp_event_base_t event_bas
     return ret;
 }
 
-esp_err_t sys_esp_event_handler_instance_unregister(usr_esp_event_base_t event_base,
+esp_err_t sys_esp_event_handler_instance_unregister(esp_event_base_t event_base,
                                                 int32_t event_id,
-                                                usr_esp_event_handler_instance_t context)
+                                                esp_event_handler_instance_t context)
 {
     esp_err_t ret;
     esp_event_base_t sys_event_base;
-    switch(event_base) {
-        case WIFI_EVENT_BASE:
-            sys_event_base = WIFI_EVENT;
-            break;
-        case IP_EVENT_BASE:
-            sys_event_base = IP_EVENT;
-            break;
-        default:
-            return ESP_ERR_INVALID_ARG;
+    if (strncmp(WIFI_EVENT, event_base, strlen(WIFI_EVENT)) == 0) {
+        sys_event_base = WIFI_EVENT;
+    } else if (strncmp(IP_EVENT, event_base, strlen(IP_EVENT)) == 0) {
+        sys_event_base = IP_EVENT;
+    } else {
+        sys_event_base = event_base;
     }
 
     usr_context_t *usr_context = (usr_context_t *)context;

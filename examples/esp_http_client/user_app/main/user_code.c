@@ -55,12 +55,12 @@ extern const char howsmyssl_com_root_cert_pem_end[]   asm("_binary_howsmyssl_com
 
 void http_request();
 
-UIRAM_ATTR void event_handler(void* arg, usr_esp_event_base_t event_base,
+UIRAM_ATTR void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
-    if (event_base == WIFI_EVENT_BASE && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT_BASE && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (retries < 5) {
             esp_wifi_connect();
             ESP_LOGE(TAG, "Retry to connect to the AP");
@@ -69,7 +69,7 @@ UIRAM_ATTR void event_handler(void* arg, usr_esp_event_base_t event_base,
             ESP_LOGE(TAG, "Failed to connect to the AP");
             xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
-    } else if (event_base == IP_EVENT_BASE && event_id == IP_EVENT_STA_GOT_IP) {
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -103,20 +103,20 @@ esp_err_t usr_wifi_init()
         goto exit;
     }
 
-    usr_esp_event_handler_instance_t instance_any_id;
-    usr_esp_event_handler_instance_t instance_got_ip;
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
 
-    usr_esp_event_handler_instance_register(WIFI_EVENT_BASE,
-                                            ESP_EVENT_ANY_ID,
-                                            &event_handler,
-                                            NULL,
-                                            &instance_any_id);
+    esp_event_handler_instance_register(WIFI_EVENT,
+                                        ESP_EVENT_ANY_ID,
+                                        &event_handler,
+                                        NULL,
+                                        &instance_any_id);
 
-    usr_esp_event_handler_instance_register(IP_EVENT_BASE,
-                                            IP_EVENT_STA_GOT_IP,
-                                            &event_handler,
-                                            NULL,
-                                            &instance_got_ip);
+    esp_event_handler_instance_register(IP_EVENT,
+                                        IP_EVENT_STA_GOT_IP,
+                                        &event_handler,
+                                        NULL,
+                                        &instance_got_ip);
 
     ret |= esp_wifi_set_mode(WIFI_MODE_STA);
     if (ret != 0) {
@@ -142,8 +142,8 @@ esp_err_t usr_wifi_init()
     }
 
 cleanup:
-    usr_esp_event_handler_instance_unregister(IP_EVENT_BASE, IP_EVENT_STA_GOT_IP, instance_got_ip);
-    usr_esp_event_handler_instance_unregister(WIFI_EVENT_BASE, ESP_EVENT_ANY_ID, instance_any_id);
+    esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip);
+    esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id);
 exit:
     vEventGroupDelete(wifi_event_group);
     return ret;

@@ -800,7 +800,7 @@ UIRAM_ATTR static void usr_dispatcher_task(void *arg)
             }
             case ESP_SYSCALL_EVENT_ESP_EVENT: {
                 usr_event_args_t *event_args = (usr_event_args_t *)&dispatch_ctx.dispatch_data.event_args;
-                usr_esp_event_handler_t usr_event_handler = event_args->usr_context.usr_event_handler;
+                esp_event_handler_t usr_event_handler = event_args->usr_context.usr_event_handler;
                 if (usr_event_handler) {
                     (*usr_event_handler)(event_args->usr_context.usr_args, event_args->event_base, event_args->event_id, event_args->event_data);
                 }
@@ -842,19 +842,19 @@ esp_netif_t* usr_esp_netif_create_default_wifi_sta()
     return EXECUTE_SYSCALL(__NR_esp_netif_create_default_wifi_sta);
 }
 
-esp_err_t usr_esp_event_handler_instance_register(usr_esp_event_base_t event_base,
+esp_err_t usr_esp_event_handler_instance_register(esp_event_base_t event_base,
                                               int32_t event_id,
-                                              usr_esp_event_handler_t event_handler,
+                                              esp_event_handler_t event_handler,
                                               void *event_handler_arg,
-                                              usr_esp_event_handler_instance_t *context)
+                                              esp_event_handler_instance_t *context)
 {
     return EXECUTE_SYSCALL(event_base, event_id, event_handler, event_handler_arg, context,
                           __NR_esp_event_handler_instance_register);
 }
 
-esp_err_t usr_esp_event_handler_instance_unregister(usr_esp_event_base_t event_base,
+esp_err_t usr_esp_event_handler_instance_unregister(esp_event_base_t event_base,
                                                 int32_t event_id,
-                                                usr_esp_event_handler_instance_t context)
+                                                esp_event_handler_instance_t context)
 {
     return EXECUTE_SYSCALL(event_base, event_id, context, __NR_esp_event_handler_instance_unregister);
 }

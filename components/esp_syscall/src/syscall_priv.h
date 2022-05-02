@@ -32,7 +32,7 @@ typedef struct {
 } usr_context_t;
 
 typedef struct {
-    usr_esp_event_base_t event_base;
+    esp_event_base_t event_base;
     int32_t event_id;
     void *event_data;
     usr_context_t usr_context;
