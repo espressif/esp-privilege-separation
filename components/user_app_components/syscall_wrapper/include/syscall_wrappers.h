@@ -26,6 +26,9 @@
 #include "hal/gpio_types.h"
 #include "driver/gpio.h"
 
+#include "syscall_structs.h"
+#include "syscall_macros.h"
+
 #include "esp_event.h"
 
 #ifdef __cplusplus

@@ -23,7 +23,7 @@
 #include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 #include "syscall_wrappers.h"
-#include "syscall_priv.h"
+#include "syscall_structs.h"
 #include "esp_event.h"
 #include "esp_wifi.h"
 
@@ -44,27 +44,6 @@
 #define XTSTR(x)	_XTSTR(x)
 #endif
 
-static const char *TAG = "syscall_wrapper";
-
-extern int _user_bss_start;
-extern int _user_bss_end;
-extern int _user_heap_start;
-extern int _heap_start;
-extern int _user_data_start;
-extern void user_main(void);
-
-#define CLEANUP_TASK_STACK_SIZE     1024
-#define CLEANUP_TASK_PRIO           20
-#define DISPATCHER_TASK_PRIO 22
-
-/* Queue to receive registered events from protected app */
-static QueueHandle_t usr_dispatcher_queue;
-/* Task to trigger event callbacks in user app */
-static TaskHandle_t usr_dispatcher_task_handle;
-
-/* Queue to receive user space heap pointers from protected app */
-static QueueHandle_t usr_mem_cleanup_queue;
-
 static bool _is_heap_initialized;
 
 #ifdef __GNUC__
@@ -78,26 +57,6 @@ static bool _is_heap_initialized;
  * Not required to explicitly reserve because app_update component is now included in the user_app
  */
 //const __attribute__((section(".rodata_desc"))) uint8_t user_app_desc[256];
-
-/* .startup_resources section is placed at the end of .bss section and before heap start.
- *
- * We place usr_resources_t struct here which contains the resources (startup stack, startup errno)
- * required by the protected app to spawn the first user task, as the protected space has no knowledge of user space heap.
- */
-const __attribute__((section(".startup_resources"))) usr_resources_t startup_res;
-
-/* Embed _user_data_start, _user_heap_start, and pointer to startup_res as custom_app_desc in the user_app binary.
- * Due to its fixed offset (sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)),
- * it can be parsed by protected app to fetch information required to spawn user app
- */
-
-const __attribute__((section(".rodata_custom_desc"))) usr_custom_app_desc_t custom_app_desc = {
-    .user_app_dram_start = (int)&_user_data_start,
-    .user_app_heap_start = (int)&_user_heap_start,
-    .user_app_resources = (int)&startup_res
-};
-
-static void usr_dispatcher_task(void *arg);
 
 // ROM and Newlib
 int usr_putchar(int c)
@@ -769,49 +728,6 @@ esp_err_t usr_gpio_install_isr_service(int intr_alloc_flags)
     return EXECUTE_SYSCALL(intr_alloc_flags, __NR_gpio_install_isr_service);
 }
 
-UIRAM_ATTR static void usr_dispatcher_task(void *arg)
-{
-    QueueHandle_t usr_queue = (QueueHandle_t)arg;
-    usr_dispatch_ctx_t dispatch_ctx;
-    while (1) {
-        usr_xQueueReceive(usr_queue, &dispatch_ctx, portMAX_DELAY);
-        switch (dispatch_ctx.event) {
-            case ESP_SYSCALL_EVENT_GPIO: {
-                usr_gpio_args_t *usr_context = (usr_gpio_args_t *)&dispatch_ctx.dispatch_data.gpio_args;
-                if (is_valid_user_i_addr(usr_context->usr_isr)) {
-                    (usr_context->usr_isr)(usr_context->usr_args);
-                }
-                break;
-            }
-
-            case ESP_SYSCALL_EVENT_ESP_TIMER: {
-                esp_timer_create_args_t *usr_context = (esp_timer_create_args_t *)&dispatch_ctx.dispatch_data.esp_timer_args;
-                if (is_valid_user_i_addr(usr_context->callback)) {
-                    (usr_context->callback)(usr_context->arg);
-                }
-                break;
-            }
-            case ESP_SYSCALL_EVENT_XTIMER: {
-                usr_xtimer_context_t *usr_context = (usr_xtimer_context_t *)&dispatch_ctx.dispatch_data.xtimer_args;
-                if (is_valid_user_i_addr(usr_context->usr_cb)) {
-                    (usr_context->usr_cb)(usr_context->timerhandle);
-                }
-                break;
-            }
-            case ESP_SYSCALL_EVENT_ESP_EVENT: {
-                usr_event_args_t *event_args = (usr_event_args_t *)&dispatch_ctx.dispatch_data.event_args;
-                esp_event_handler_t usr_event_handler = event_args->usr_context.usr_event_handler;
-                if (usr_event_handler) {
-                    (*usr_event_handler)(event_args->usr_context.usr_args, event_args->event_base, event_args->event_id, event_args->event_data);
-                }
-                break;
-            }
-            default:
-                break;
-        }
-    }
-}
-
 esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t isr_handler, void *args, usr_gpio_handle_t *gpio_handle)
 {
     return EXECUTE_SYSCALL(gpio_num, isr_handler, args, gpio_handle, __NR_gpio_softisr_handler_add);
@@ -950,37 +866,6 @@ UIRAM_ATTR bool usr_spi_flash_cache_enabled(void)
 #pragma GCC diagnostic pop
 #endif
 
-/* Define all memory regions as default DRAM memory region.
- * Block 9 is defined as DRAM used for startup stack in IDF but in case of user app,
- * we use pre-reserved memory as startup stack
- */
-#define ROM_DRAM_RESERVE_START          0x3FCDF060
-
-const ets_rom_layout_t layout =  {.dram0_rtos_reserved_start = (void *)ROM_DRAM_RESERVE_START};
-
-const ets_rom_layout_t * const ets_rom_layout_p = &layout;
-
-const soc_memory_region_t soc_memory_regions[] = {
-    { 0x3FC80000, 0x20000, 0, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
-    { 0x3FCA0000, 0x20000, 0, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
-    { 0x3FCC0000, 0x20000, 0, 0x403C0000}, //Block 9,  can be used as trace memory
-#ifdef CONFIG_ESP_SYSTEM_ALLOW_RTC_FAST_MEM_AS_HEAP
-    { 0x50000000, 0x2000,  4, 0}, //Fast RTC memory
-#endif
-};
-
-const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
-
-void usr_vPortCPUInitializeMutex(portMUX_TYPE *mux)
-{
-    (void)mux;
-}
-
-void usr_vPortCPUAcquireMutex(portMUX_TYPE *mux)
-{
-    (void)mux;
-}
-
 void usr_lwip_freeaddrinfo(struct addrinfo *ai)
 {
     free(ai);
@@ -1039,81 +924,4 @@ int usr_ets_printf(const char *fmt, ...)
         free(str_ptr);
     }
     return ret;
-}
-
-esp_err_t usr_clear_bss()
-{
-    if (is_valid_udram_addr(&_user_bss_start) && is_valid_udram_addr(&_user_bss_end)) {
-        memset(&_user_bss_start, 0, (&_user_bss_end - &_user_bss_start) * sizeof(_user_bss_start));
-        return 0;
-    } else {
-        return -1;
-    }
-}
-
-/* This task is responsible for freeing up user stack and user errno variable used for a user task.
- * Since protected space has no knowledge of user heap, it sends the user space stack pointer and
- * user space errno variable on the queue for it to be freed and reclaimed by the user space.
- */
-void usr_mem_cleanup_task(void *args)
-{
-    void *ptr;
-    QueueHandle_t queue = (QueueHandle_t)args;
-    while(1) {
-        usr_xQueueReceive(queue, &ptr, portMAX_DELAY);
-        if (ptr == &startup_res.startup_stack) {
-            /* The first user task is spawned by the protected app and it uses the memory reserved
-             * in .startup_resources section. This memory is not added in the heap initially and when
-             * the first user task is deleted, we add the memory into heap
-             */
-            heap_caps_add_region((intptr_t)ptr, (intptr_t)&_heap_start);
-        } else if (ptr > (void *)&_heap_start) {
-            free(ptr);
-        }
-    }
-}
-
-static void user_cleanup_service_init()
-{
-    /* Create queue which will receive user space memory that needs to be freed.
-     * queueQUEUE_TYPE_CLEANUP is a special queue type defined by esp_priv_access component.
-     * It will be cached in protected space and used to send data on.
-     */
-    usr_mem_cleanup_queue = usr_xQueueGenericCreate(20, sizeof(void *), queueQUEUE_TYPE_CLEANUP);
-    if (usr_mem_cleanup_queue == NULL) {
-        ESP_LOGE(TAG, "Error creating cleanup queue\nAborting...");
-        abort();
-    }
-
-    // Create clean up task with a higher priority to ensure that the user memory is freed instantenously
-    int ret = usr_xTaskCreatePinnedToCore(usr_mem_cleanup_task, "User cleanup task", CLEANUP_TASK_STACK_SIZE, usr_mem_cleanup_queue, CLEANUP_TASK_PRIO, NULL, 0);
-    if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Error creating cleanup task\nAborting...");
-        abort();
-    }
-}
-
-static void user_dispatch_service_init()
-{
-    usr_dispatcher_queue = usr_xQueueGenericCreate(20, sizeof(usr_dispatch_ctx_t), queueQUEUE_TYPE_DISPATCH);
-    if (!usr_dispatcher_queue) {
-        ESP_LOGE(TAG, "Failed to create dispatcher queue\nAborting...");
-        abort();
-    }
-    usr_xTaskCreatePinnedToCore(usr_dispatcher_task, "User event dispatcher", CONFIG_PA_USER_DISPATCHER_TASK_STACK_SIZE, usr_dispatcher_queue, DISPATCHER_TASK_PRIO, &usr_dispatcher_task_handle, 0);
-    if (!usr_dispatcher_task_handle) {
-        ESP_LOGE(TAG, "Failed to create dispatcher task\nAborting...");
-        abort();
-    }
-}
-
-void _user_main()
-{
-    usr_clear_bss();
-    heap_caps_init();
-    _is_heap_initialized = 1;
-    user_cleanup_service_init();
-    user_dispatch_service_init();
-    user_main();
-    usr_vTaskDelete(NULL);
 }

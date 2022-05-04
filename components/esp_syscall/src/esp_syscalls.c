@@ -28,8 +28,7 @@
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include <nvs_flash.h>
-#include "syscall_wrappers.h"
-#include "syscall_priv.h"
+#include "syscall_structs.h"
 #include "esp_map.h"
 
 #include <lwip/sockets.h>
@@ -56,6 +55,7 @@
 #define TAG     __func__
 
 typedef void (*syscall_t)(void);
+typedef void* usr_gpio_handle_t;
 
 /* These are the indexes in esp_event_map_arr to store the user space EVENT base.
  * This is required because esp_event_base_t is a string pointer and it is different for protected space
