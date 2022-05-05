@@ -42,19 +42,29 @@ found*  \ :component_file:`here <../components/esp_syscall/syscall/syscall.tbl>`
 Adding custom system call
 -------------------------
 
-To add your own custom system call, you will need to perform 3 steps:
+To add your own custom system call, you will need to perform 5 steps:
 
-.. _1-assign-new-system-call-number:
 
-1. Assign new system call number
+.. _1-create-a-custom-syscall-table:
+
+1. Create a custom system call table
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a .tbl file in example or component to declare custom system calls.
+
+::
+
+    touch <path/to/tbl/file>/custom_syscall.tbl
+
+.. _2-assign-new-system-call-number:
+
+2. Assign new system call number
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All the supported system calls are inside
-:component_file:`syscall.tbl <../components/esp_syscall/syscall/syscall.tbl>`. This
-table is parsed by scripts and generates relevant header files which are
-used in applications. You will need to add your own system call entry in
-this table. Choose a number that isn't being used already and add it in
-the table following the convention:
+System calls supported by the framework are present inside :component_file:`syscall.tbl <../components/esp_syscall/syscall/syscall.tbl>`. This default table along with custom system call table is parsed by scripts and generates relevant header
+files which are used in applications. You will need to add your own system
+call entry in the custom table. Choose a number that isn't being used by the default system call table and
+add it in the table following the convention:
 
 ::
 
@@ -75,15 +85,15 @@ the table following the convention:
 ``sys_custom_func`` is the entry point of the system call in protected
 space.
 
-.. _2-user-system-call-implementation:
+.. _3-user-system-call-implementation:
 
-2. User system call implementation
+3. User system call implementation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Implement wrapper function that will invoke ecall with the system call
-number. All such wrapper functions are defined in
-:component_file:`syscall_wrappers.c <../components/esp_syscall/src/syscall_wrappers.c>`.
-Define the wrapper function which can be called from user application:
+number. Create a source file custom_wrappers.c in example or
+custom component, and define the wrapper function which can be called
+from user application:
 
 ::
 
@@ -99,16 +109,18 @@ in ``syscall_def.h`` file, created during build process.
 
 ``EXECUTE_SYSCALL`` is a macro defined in :component_file:`syscall_priv.h <../components/esp_syscall/src/syscall_priv.h>` file.
 
-.. _3-protected-system-call-implementation:
+All such wrapper functions for default system calls are defined in
+:component_file:`syscall_wrappers.c <../components/esp_syscall/src/syscall_wrappers.c>`.
 
-3. Protected system call implementation
+.. _4-protected-system-call-implementation:
+
+4. Protected system call implementation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Implement the function for system call. This will be called in protected
 space whenever a syscall request with the corresponding system call
-number is invoked. All the system call functions are defined in
-:component_file:`esp_syscall.c <../components/esp_syscall/src/esp_syscalls.c>` and
-define the custom_function in this same file.
+number is invoked. To implement the function for system call, create a
+source file custom_syscalls.c and define the custom_function in this file.
 
 ::
 
@@ -118,10 +130,39 @@ define the custom_function in this same file.
    }
 
 The name of the function should be the same as the name mentioned in the
-4th column in ``syscall.tbl`` file.
+4th column in ``custom_syscall.tbl`` file.
 
-Once the above steps are done, you will need to re-build protected and
-user application.
+All the system call functions for default system calls are defined in
+:component_file:`esp_syscalls.c <../components/esp_syscall/src/esp_syscalls.c>`
+
+.. _5-build-system-changes-to-add-custom-system-calls:
+
+5. Build system changes to add custom system calls
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Set ``CUSTOM_SYSCALL_TBL`` CMake variable in the project CMakeLists.txt
+with the path to custom system call table files. CUSTOM_SYSCALL_TBL
+can specify path to multiple system call table files, build system will
+parse and add system calls from all the specified files.
+
+::
+
+    set(CUSTOM_SYSCALL_TBL <path/to/tbl/file>/custom_syscall1.tbl
+                           <path/to/tbl/file>/custom_syscall2.tbl)
+
+In the custom component or main component, build custom_syscalls.c
+source file in the protected app build process and build custom_wrappers.c
+source file in user app build process.
+
+::
+
+    if(USER_APP_BUILD)
+        set(srcs <path/to/custom/wrappers>/custom_wrappers.c)
+    else()
+        set(srcs <path/to/custom/syscalls>/custom_syscalls.c)
+    endif()
+
+    idf_component_register(SRCS ${srcs})
 
 .. _trans_syscall:
 

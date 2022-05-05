@@ -30,6 +30,7 @@ if (USER_APP_BUILD)
         OUTPUT user_out.ld
         COMMAND "${CMAKE_C_COMPILER}" -C -P -x c -E -o user_out.ld -I ${PROTECTED_CONFIG_DIR} -I ${PROJECT_DIR} ${LD_DIR}/user.ld
         MAIN_DEPENDENCY ${LD_DIR}/user.ld ${PROJECT_DIR}/user_config.h
+        DEPENDS ${PROTECTED_CONFIG_DIR}/memory_layout.h
         COMMENT "Generating linker script..."
         VERBATIM)
 
