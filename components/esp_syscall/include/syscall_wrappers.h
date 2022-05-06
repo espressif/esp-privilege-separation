@@ -19,11 +19,18 @@
  * APIs that are marked `common` have the same prototype and the translation is done
  * in the build system.
  */
+
+#pragma once
+
 #include "soc_defs.h"
 #include "hal/gpio_types.h"
 #include "driver/gpio.h"
 
 #include "esp_event.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef void* usr_esp_event_handler_instance_t;
 typedef void* usr_gpio_handle_t;
@@ -223,3 +230,7 @@ esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t softisr_handl
  *      - ESP_FAIL otherwise
  */
 esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle);
+
+#ifdef __cplusplus
+}
+#endif

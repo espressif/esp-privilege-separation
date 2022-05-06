@@ -20,6 +20,10 @@
 #include <esp_partition.h>
 #include "esp_log.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void (*esp_priv_access_intr_handler_t)(void *arg);
 
 typedef enum {
@@ -194,3 +198,7 @@ uint32_t esp_priv_access_get_fault_addr(esp_priv_access_int_t int_type);
  *      - ESP_OK on success
  */
 esp_err_t esp_priv_access_set_periph_perm(esp_priv_access_periph_t periph, esp_priv_access_world_t world, esp_priv_access_perm_t perm);
+
+#ifdef __cplusplus
+}
+#endif

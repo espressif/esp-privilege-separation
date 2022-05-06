@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include "soc/soc.h"
 #include "soc/world_controller_reg.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 static inline void wcntl_ll_set_mtvec_base(uint32_t vecbase)
 {
@@ -59,3 +65,7 @@ static inline void wcntl_ll_set_mstatus_mie(bool state)
 {
     REG_WRITE(WORLD_CONTROL_CORE_X_MSTATUS_MIE(0), state);
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include "soc/periph_defs.h"
 #include "soc/world_controller_reg.h"
 #include "soc/sensitive_reg.h"
@@ -20,6 +22,10 @@
 #include "soc/apb_ctrl_reg.h"
 #include "esp_intr_alloc.h"
 #include "hal/memprot_ll.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum {
     PERMC_WORLD_0 = 0,
@@ -641,3 +647,7 @@ static inline uint32_t permc_ll_pif_get_fault_addr()
 {
     return REG_READ(SENSITIVE_CORE_0_PIF_PMS_MONITOR_3_REG);
 }
+
+#ifdef __cplusplus
+}
+#endif

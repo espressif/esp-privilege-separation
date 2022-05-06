@@ -19,6 +19,10 @@
 #include "soc/soc.h"
 #include "sdkconfig.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 0))
 #define IDF_VERSION_V4_3
 #undef IDF_VERSION_V4_4
@@ -202,4 +206,8 @@ static inline bool is_valid_kdram_addr(void *ptr)
     return 0;
 }
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif
