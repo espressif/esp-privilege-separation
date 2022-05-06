@@ -27,6 +27,28 @@
 #define IDF_VERSION_V4_4
 #endif
 
+#ifndef __ASSEMBLER__
+
+// Check if the relevant config options are set
+#if CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
+#error "IDF's memprot feature has to be disabled"
+#endif
+
+#ifndef CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP
+#error "Enable FreeRTOS static task cleanup"
+#endif
+
+#ifndef CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION
+#error "Enable FreeRTOS static allocation support"
+#endif
+
+#ifndef CONFIG_PARTITION_TABLE_CUSTOM
+#error "ESP Privilege Separation framework requires custom partition table"
+#endif
+
+_Static_assert(CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS == 5, "FreeRTOS Thread Local Storage pointers should be equal to 5");
+
+#endif  /* __ASSEMBLER__ */
 
 /* WORLD1 range */
 #define SOC_UDROM_LOW    0x3C400000
@@ -179,4 +201,5 @@ static inline bool is_valid_kdram_addr(void *ptr)
 
     return 0;
 }
+
 #endif
