@@ -35,22 +35,22 @@ extern "C" {
 
 // Check if the relevant config options are set
 #if CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
-#error "IDF's memprot feature has to be disabled"
+#error "Please disable ESP-IDF memprot feature, as its not compatible with memory protection scheme of this framework"
 #endif
 
 #ifndef CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP
-#error "Enable FreeRTOS static task cleanup"
+#error "Please enable FreeRTOS static task cleanup"
 #endif
 
 #ifndef CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION
-#error "Enable FreeRTOS static allocation support"
+#error "Please enable FreeRTOS static allocation support"
 #endif
 
 #ifndef CONFIG_PARTITION_TABLE_CUSTOM
 #error "ESP Privilege Separation framework requires custom partition table"
 #endif
 
-_Static_assert(CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS == 5, "FreeRTOS Thread Local Storage pointers should be equal to 5");
+_Static_assert(CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS >= 5, "FreeRTOS Thread Local Storage pointers should be equal or greater than 5");
 
 #endif  /* __ASSEMBLER__ */
 
