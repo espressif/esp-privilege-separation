@@ -15,8 +15,44 @@
 #pragma once
 
 #include <stdbool.h>
+#include "esp_idf_version.h"
 #include "soc/soc.h"
 #include "sdkconfig.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 0))
+#define IDF_VERSION_V4_3
+#undef IDF_VERSION_V4_4
+#elif (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0))
+#undef IDF_VERSION_V4_3
+#define IDF_VERSION_V4_4
+#endif
+
+#ifndef __ASSEMBLER__
+
+// Check if the relevant config options are set
+#if CONFIG_ESP_SYSTEM_MEMPROT_FEATURE
+#error "Please disable ESP-IDF memprot feature, as its not compatible with memory protection scheme of this framework"
+#endif
+
+#ifndef CONFIG_FREERTOS_ENABLE_STATIC_TASK_CLEAN_UP
+#error "Please enable FreeRTOS static task cleanup"
+#endif
+
+#ifndef CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION
+#error "Please enable FreeRTOS static allocation support"
+#endif
+
+#ifndef CONFIG_PARTITION_TABLE_CUSTOM
+#error "ESP Privilege Separation framework requires custom partition table"
+#endif
+
+_Static_assert(CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS >= 5, "FreeRTOS Thread Local Storage pointers should be equal or greater than 5");
+
+#endif  /* __ASSEMBLER__ */
 
 /* WORLD1 range */
 #define SOC_UDROM_LOW    0x3C400000
@@ -168,5 +204,10 @@ static inline bool is_valid_kdram_addr(void *ptr)
     }
 
     return 0;
+}
+
+#endif
+
+#ifdef __cplusplus
 }
 #endif

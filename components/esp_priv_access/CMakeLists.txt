@@ -20,7 +20,12 @@ if (USER_APP_BUILD)
     idf_build_set_property(COMPILE_OPTIONS "-fno-builtin" APPEND)
     idf_build_set_property(COMPILE_OPTIONS "-Wno-format" APPEND)
 
-    target_linker_script(${COMPONENT_LIB} INTERFACE $ENV{IDF_PATH}/components/${IDF_TARGET}/ld/${IDF_TARGET}.peripherals.ld)
+    if((${IDF_VERSION_MAJOR} EQUAL 4) AND (${IDF_VERSION_MINOR} EQUAL 3))
+        set(peripherals_ld $ENV{IDF_PATH}/components/${IDF_TARGET}/ld/${IDF_TARGET}.peripherals.ld)
+    elseif((${IDF_VERSION_MAJOR} EQUAL 4) AND (${IDF_VERSION_MINOR} EQUAL 4))
+        set(peripherals_ld $ENV{IDF_PATH}/components/soc/${IDF_TARGET}/ld/${IDF_TARGET}.peripherals.ld)
+    endif()
+    target_linker_script(${COMPONENT_LIB} INTERFACE ${peripherals_ld})
 
     target_linker_script(${COMPONENT_LIB} INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/user_out.ld")
 

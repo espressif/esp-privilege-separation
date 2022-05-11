@@ -1,6 +1,7 @@
 idf_build_get_property(target IDF_TARGET)
 idf_build_get_property(sdkconfig_header SDKCONFIG_HEADER)
 idf_build_get_property(idf_path IDF_PATH)
+if((${IDF_VERSION_MAJOR} EQUAL 4) AND (${IDF_VERSION_MINOR} EQUAL 3))
 if(NOT "${target}" STREQUAL "esp32c3")
     return()
 endif()
@@ -43,3 +44,7 @@ set_source_files_properties(
     cpu_start.c
     PROPERTIES COMPILE_FLAGS
     -fno-stack-protector)
+
+elseif((${IDF_VERSION_MAJOR} EQUAL 4) AND (${IDF_VERSION_MINOR} EQUAL 4))
+    include(${idf_path}/components/esp32c3/CMakeLists.txt)
+endif()

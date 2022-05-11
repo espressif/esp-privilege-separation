@@ -14,6 +14,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     void *stack;
     int stack_size;
@@ -83,3 +87,7 @@ typedef struct {
     usr_event_t event;
     usr_dispatch_data_t dispatch_data;
 } usr_dispatch_ctx_t;
+
+#ifdef __cplusplus
+}
+#endif

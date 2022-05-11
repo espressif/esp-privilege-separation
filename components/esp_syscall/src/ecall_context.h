@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include "riscv/rvruntime-frames.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * ECALL stack frame
@@ -37,3 +43,6 @@ STRUCT_END(RvEcallFrame)
 
 #define RV_ESTK_FRMSZ    (ALIGNUP(0x10, RV_ESTK_SIZE))
 
+#ifdef __cplusplus
+}
+#endif

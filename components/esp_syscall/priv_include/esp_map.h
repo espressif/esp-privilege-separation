@@ -14,6 +14,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ESP_MAP_QUEUE_ID        0xF5A1
 #define ESP_MAP_TASK_ID         0xF5A2
 #define ESP_MAP_ESP_TIMER_ID    0xF5A3
@@ -43,3 +47,7 @@ esp_map_handle_t *esp_map_verify(int wrapper_index, int type);
 void esp_map_remove(int wrapper_index);
 esp_map_handle_t *esp_map_get_handle(int wrapper_index);
 int esp_map_get_allocated_size(void);
+
+#ifdef __cplusplus
+}
+#endif

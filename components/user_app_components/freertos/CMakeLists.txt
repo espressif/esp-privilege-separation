@@ -14,6 +14,12 @@ else()  # RISC-V
         ${freertos_dir}/include
         ${freertos_dir}/port/riscv/include)
 
+    if((${IDF_VERSION_MAJOR} EQUAL 4) AND (${IDF_VERSION_MINOR} EQUAL 4))
+        list(APPEND include_dirs
+            ${freertos_dir}/include/esp_additions/freertos
+            ${freertos_dir}/include/esp_additions)
+    endif()
+
     set(required_components esp_timer)
 
 endif()
@@ -23,3 +29,5 @@ endif()
 idf_component_register(SRCS freertos_stubs.c
                        INCLUDE_DIRS ${include_dirs}
                        REQUIRES ${required_components})
+
+idf_component_set_property(freertos ORIG_INCLUDE_PATH "${freertos_dir}/include/freertos/")

@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include "string.h"
+#include "esp_idf_version.h"
 #include <syscall_def.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -444,24 +445,40 @@ void sys_vTaskStepTick(const TickType_t xTicksToJump)
 #endif
 }
 
+#if defined(IDF_VERSION_V4_3)
 BaseType_t sys_xTaskGenericNotify(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue)
+#elif defined(IDF_VERSION_V4_4)
+BaseType_t sys_xTaskGenericNotify(TaskHandle_t xTaskToNotify, UBaseType_t uxIndexToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue)
+#endif
 {
     int wrapper_index = (int)xTaskToNotify;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
     if (wrapper_handle == NULL) {
         return -1;
     }
+#if defined(IDF_VERSION_V4_3)
     return xTaskGenericNotify((TaskHandle_t)wrapper_handle->handle, ulValue, eAction, pulPreviousNotificationValue);
+#elif defined(IDF_VERSION_V4_4)
+    return xTaskGenericNotify((TaskHandle_t)wrapper_handle->handle, uxIndexToNotify, ulValue, eAction, pulPreviousNotificationValue);
+#endif
 }
 
+#if defined(IDF_VERSION_V4_3)
 BaseType_t sys_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue, BaseType_t *pxHigherPriorityTaskWoken)
+#elif defined(IDF_VERSION_V4_4)
+BaseType_t sys_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, UBaseType_t uxIndexToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue, BaseType_t *pxHigherPriorityTaskWoken)
+#endif
 {
     int wrapper_index = (int)xTaskToNotify;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
     if (wrapper_handle == NULL) {
         return -1;
     }
+#if defined(IDF_VERSION_V4_3)
     return xTaskGenericNotifyFromISR((TaskHandle_t)wrapper_handle->handle, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken);
+#elif defined(IDF_VERSION_V4_4)
+    return xTaskGenericNotifyFromISR((TaskHandle_t)wrapper_handle->handle, uxIndexToNotify, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken);
+#endif
 }
 
 void sys_vTaskNotifyGiveFromISR(TaskHandle_t xTaskToNotify, BaseType_t *pxHigherPriorityTaskWoken)

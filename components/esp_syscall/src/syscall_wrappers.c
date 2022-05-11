@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include "string.h"
+#include "esp_idf_version.h"
 #include "syscall_def.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -282,14 +283,30 @@ void usr_vTaskStepTick(const TickType_t xTicksToJump)
 }
 
 // Task Notifications
+#if defined(IDF_VERSION_V4_3)
 BaseType_t usr_xTaskGenericNotify(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue)
+#elif defined(IDF_VERSION_V4_4)
+BaseType_t usr_xTaskGenericNotify(TaskHandle_t xTaskToNotify, UBaseType_t uxIndexToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue)
+#endif
 {
+#if defined(IDF_VERSION_V4_3)
     return EXECUTE_SYSCALL(xTaskToNotify, ulValue, eAction, pulPreviousNotificationValue, __NR_xTaskGenericNotify);
+#elif defined(IDF_VERSION_V4_4)
+    return EXECUTE_SYSCALL(xTaskToNotify, uxIndexToNotify, ulValue, eAction, pulPreviousNotificationValue, __NR_xTaskGenericNotify);
+#endif
 }
 
+#if defined(IDF_VERSION_V4_3)
 BaseType_t usr_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue, BaseType_t *pxHigherPriorityTaskWoken)
+#elif defined(IDF_VERSION_V4_4)
+BaseType_t usr_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, UBaseType_t uxIndexToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue, BaseType_t *pxHigherPriorityTaskWoken)
+#endif
 {
+#if defined(IDF_VERSION_V4_3)
     return EXECUTE_SYSCALL(xTaskToNotify, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken, __NR_xTaskGenericNotifyFromISR);
+#elif defined(IDF_VERSION_V4_4)
+    return EXECUTE_SYSCALL(xTaskToNotify, uxIndexToNotify, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken, __NR_xTaskGenericNotifyFromISR);
+#endif
 }
 
 void usr_vTaskNotifyGiveFromISR(TaskHandle_t xTaskToNotify, BaseType_t *pxHigherPriorityTaskWoken)
