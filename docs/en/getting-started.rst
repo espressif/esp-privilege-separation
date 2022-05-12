@@ -118,7 +118,7 @@ protected app can access the GPIO registers. For more details, refer :doc:`ESP P
 
 This is a sample driver that we have included in the components to demonstrate how to write a driver for a specific device and
 how it can be registered so that the user application is able to use it. The driver is implemented in protected space
-but the user can use it through the VFS layer (open, read, write, close). Check the implementation at :component_file:`drivers/ws2812/ws2812.c`.
+but the user can use it through the VFS layer (open, read, write, close). Check the implementation at :component_file:`shared/drivers/ws2812/ws2812.c`.
 
 For more details about the driver development, please refer :ref:`Driver development<driver_devel>`.
 

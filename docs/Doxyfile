@@ -21,9 +21,9 @@ PROJECT_NAME = "ESP Privilege Separation Programming Guide"
 ## and used to include in API reference documentation
 
 INPUT = \
-    $(PROJECT_PATH)/components/esp_priv_access/include/esp_priv_access.h \
-    $(PROJECT_PATH)/components/esp_priv_access/include/permc_ll.h \
-    $(PROJECT_PATH)/components/esp_syscall/include/syscall_wrappers.h
+    $(PROJECT_PATH)/components/protected/esp_priv_access/include/esp_priv_access.h \
+    $(PROJECT_PATH)/components/protected/esp_priv_access/include/permc_ll.h \
+    $(PROJECT_PATH)/components/user/syscall_wrapper/include/syscall_wrappers.h
 
 ## Get warnings for functions that have no documentation for their parameters or return value
 ##
