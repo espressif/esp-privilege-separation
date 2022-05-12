@@ -53,11 +53,11 @@ add_custom_target(defsym_target DEPENDS ${defsym_path})
 
 # Extract the memory boundaries from the protected_app ELF.
 # Pass these memory boundaries to user_app as its starting region
-idf_component_get_property(build_utility_dir build_utility COMPONENT_DIR)
+idf_component_get_property(esp_priv_build_utils_dir esp_priv_build_utils COMPONENT_DIR)
 
 add_custom_command(
     OUTPUT ${config_dir}/memory_layout.h
-    COMMAND ${build_utility_dir}/utility/extract_memory_boundaries.sh ${toolprefix} ${build_dir}/${PROJECT_NAME}.elf ${config_dir}/memory_layout.h
+    COMMAND ${esp_priv_build_utils_dir}/utility/extract_memory_boundaries.sh ${toolprefix} ${build_dir}/${PROJECT_NAME}.elf ${config_dir}/memory_layout.h
     DEPENDS ${build_dir}/${PROJECT_NAME}.elf
     VERBATIM)
 
@@ -104,7 +104,7 @@ set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" APPEND PROPERTY
 
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/app_libs_and_objs.json
-    COMMAND ${python} ${build_utility_dir}/utility/gen_lib_list.py --build=${CMAKE_BINARY_DIR} --app_name=${PROJECT_NAME}
+    COMMAND ${python} ${esp_priv_build_utils_dir}/utility/gen_lib_list.py --build=${CMAKE_BINARY_DIR} --app_name=${PROJECT_NAME}
     DEPENDS user_app
     COMMENT "Generating list of libraries and object files from firmware image"
     VERBATIM

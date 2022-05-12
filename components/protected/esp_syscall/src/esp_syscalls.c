@@ -38,7 +38,6 @@
 
 #include "esp_rom_md5.h"
 
-#include <esp_image_format.h>
 #include <esp_spi_flash.h>
 #include <esp_partition.h>
 

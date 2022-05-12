@@ -10,7 +10,6 @@ else()
 endif()
 
 set(includes
-    "include"
     "${CMAKE_CURRENT_BINARY_DIR}"
     )
 
@@ -18,7 +17,7 @@ set(includes
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
                     PRIV_INCLUDE_DIRS ${priv_include}
-                    REQUIRES esp_wifi nvs_flash esp-tls esp_priv_access build_utility)
+                    PRIV_REQUIRES esp_wifi nvs_flash esp_priv_access esp_priv_build_utils syscall_shared)
 
 set(syscallhdr_sh
     ${COMPONENT_DIR}/syscall/syscallhdr.sh ${CMAKE_CURRENT_BINARY_DIR}/syscall.tbl

@@ -13,4 +13,4 @@ endif()
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS "include"
                     PRIV_INCLUDE_DIRS "."
-                    REQUIRES bootloader_support spi_flash app_update console build_utility)
+                    PRIV_REQUIRES bootloader_support spi_flash app_update console esp_priv_build_utils)
