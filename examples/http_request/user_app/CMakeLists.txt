@@ -25,7 +25,7 @@ endif()
 set(USER_APP_BUILD 1)
 
 set(ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../../..)
-set(EXTRA_COMPONENT_DIRS ${ROOT_DIR}/components ${ROOT_DIR}/components/drivers ${ROOT_DIR}/components/user_app_components/idf_stubs ${ROOT_DIR}/components/user_app_components ${CMAKE_CURRENT_LIST_DIR}/../components)
+set(EXTRA_COMPONENT_DIRS ${ROOT_DIR}/components/shared ${ROOT_DIR}/components/user/idf_stubs ${ROOT_DIR}/components/user ${CMAKE_CURRENT_LIST_DIR}/../components)
 
 include(${IDF_PATH}/tools/cmake/project.cmake)
 
