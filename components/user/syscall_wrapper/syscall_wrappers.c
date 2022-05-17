@@ -39,6 +39,8 @@
 #include "esp32c3/rom/rom_layout.h"
 #endif
 
+#include <driver/uart.h>
+
 #ifndef XTSTR
 #define _XTSTR(x)	# x
 #define XTSTR(x)	_XTSTR(x)
@@ -94,14 +96,74 @@ void usr_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
     EXECUTE_SYSCALL(digest, context, __NR_esp_rom_md5_final);
 }
 
+int usr_esp_rom_uart_tx_one_char(uint8_t c)
+{
+    return EXECUTE_SYSCALL(c, __NR_esp_rom_uart_tx_one_char);
+}
+
+int usr_esp_rom_uart_rx_one_char(uint8_t *c)
+{
+    return EXECUTE_SYSCALL(c, __NR_esp_rom_uart_rx_one_char);
+}
+
 UIRAM_ATTR void usr__lock_acquire(_lock_t *lock)
 {
     EXECUTE_SYSCALL(lock, __NR__lock_acquire);
 }
 
+UIRAM_ATTR void usr__lock_acquire_recursive(_lock_t *lock)
+{
+    EXECUTE_SYSCALL(lock, __NR__lock_acquire_recursive);
+}
+
+UIRAM_ATTR int usr__lock_try_acquire(_lock_t *lock)
+{
+    return EXECUTE_SYSCALL(lock, __NR__lock_try_acquire);
+}
+
+UIRAM_ATTR int usr__lock_try_acquire_recursive(_lock_t *lock)
+{
+    return EXECUTE_SYSCALL(lock, __NR__lock_try_acquire_recursive);
+}
+
 UIRAM_ATTR void usr__lock_release(_lock_t *lock)
 {
     EXECUTE_SYSCALL(lock, __NR__lock_release);
+}
+
+IRAM_ATTR void usr__lock_release_recursive(_lock_t *lock)
+{
+    EXECUTE_SYSCALL(lock, __NR__lock_release_recursive);
+}
+
+UIRAM_ATTR void usr___retarget_lock_acquire(_LOCK_T lock)
+{
+    EXECUTE_SYSCALL(lock, __NR___retarget_lock_acquire);
+}
+
+UIRAM_ATTR void usr___retarget_lock_acquire_recursive(_LOCK_T lock)
+{
+    EXECUTE_SYSCALL(lock, __NR___retarget_lock_acquire_recursive);
+}
+
+UIRAM_ATTR int usr___retarget_lock_try_acquire(_LOCK_T lock)
+{
+    return EXECUTE_SYSCALL(lock, __NR___retarget_lock_try_acquire);
+}
+
+UIRAM_ATTR int usr___retarget_lock_try_acquire_recursive(_LOCK_T lock)
+{
+    return EXECUTE_SYSCALL(lock, __NR___retarget_lock_try_acquire_recursive);
+}
+
+UIRAM_ATTR void usr___retarget_lock_release(_LOCK_T lock)
+{
+    EXECUTE_SYSCALL(lock, __NR___retarget_lock_release);
+}
+
+IRAM_ATTR void usr___retarget_lock_release_recursive(_LOCK_T lock)
+{
+    EXECUTE_SYSCALL(lock, __NR___retarget_lock_release_recursive);
 }
 
 void usr_esp_time_impl_set_boot_time(uint64_t time_us)
@@ -854,6 +916,26 @@ bool usr_esp_timer_is_active(esp_timer_handle_t timer)
 int64_t UIRAM_ATTR usr_esp_system_get_time(void)
 {
     return EXECUTE_SYSCALL(__NR_esp_system_get_time);
+}
+
+esp_err_t usr_uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags)
+{
+    return EXECUTE_SYSCALL(uart_num, rx_buffer_size, tx_buffer_size, queue_size, uart_queue, intr_alloc_flags, __NR_uart_driver_install);
+}
+
+esp_err_t usr_uart_driver_delete(uart_port_t uart_num)
+{
+    return EXECUTE_SYSCALL(uart_num, __NR_uart_driver_delete);
+}
+
+int usr_uart_write_bytes(uart_port_t uart_num, const void* src, size_t size)
+{
+    return EXECUTE_SYSCALL(uart_num, src, size, __NR_uart_write_bytes);
+}
+
+int usr_uart_read_bytes(uart_port_t uart_num, void* buf, uint32_t length, TickType_t ticks_to_wait)
+{
+    return EXECUTE_SYSCALL(uart_num, buf, length, ticks_to_wait, __NR_uart_read_bytes);
 }
 
 UIRAM_ATTR bool usr_spi_flash_cache_enabled(void)

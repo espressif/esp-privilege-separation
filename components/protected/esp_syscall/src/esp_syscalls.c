@@ -40,6 +40,7 @@
 
 #include <esp_spi_flash.h>
 #include <esp_partition.h>
+#include <esp_rom_uart.h>
 
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/ets_sys.h"
@@ -50,6 +51,8 @@
 #include "riscv/rvruntime-frames.h"
 #include "ecall_context.h"
 #endif
+
+#include <driver/uart.h>
 
 #define TAG     __func__
 
@@ -71,6 +74,7 @@ static esp_event_base_t esp_event_map_arr[ESP_EVENT_MAX_INDEX];
 
 static DRAM_ATTR int usr_dispatcher_queue_index;
 static DRAM_ATTR int usr_mem_cleanup_queue_index;
+static int uart_driver_queue_index[UART_NUM_MAX];
 
 static DRAM_ATTR QueueHandle_t usr_dispatcher_queue_handle;
 static DRAM_ATTR QueueHandle_t usr_mem_cleanup_queue_handle;
@@ -147,6 +151,19 @@ void sys_esp_rom_md5_final(uint8_t *digest, md5_context_t *context)
     esp_rom_md5_final(digest, context);
 }
 
+int sys_esp_rom_uart_tx_one_char(uint8_t c)
+{
+    return esp_rom_uart_tx_one_char(c);
+}
+
+int sys_esp_rom_uart_rx_one_char(uint8_t *c)
+{
+    if (!is_valid_udram_addr(c)) {
+        return -1;
+    }
+    return esp_rom_uart_rx_one_char(c);
+}
+
 IRAM_ATTR void sys__lock_acquire(_lock_t *lock)
 {
     if (!is_valid_udram_addr(lock)) {
@@ -155,12 +172,92 @@ IRAM_ATTR void sys__lock_acquire(_lock_t *lock)
     _lock_acquire(lock);
 }
 
+IRAM_ATTR void sys__lock_acquire_recursive(_lock_t *lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return;
+    }
+    _lock_acquire_recursive(lock);
+}
+
+IRAM_ATTR int sys__lock_try_acquire(_lock_t *lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return -1;
+    }
+    return _lock_try_acquire(lock);
+}
+
+IRAM_ATTR int sys__lock_try_acquire_recursive(_lock_t *lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return -1;
+    }
+    return _lock_try_acquire_recursive(lock);
+}
+
 IRAM_ATTR void sys__lock_release(_lock_t *lock)
 {
     if (!is_valid_udram_addr(lock)) {
         return;
     }
     _lock_release(lock);
+}
+
+IRAM_ATTR void sys__lock_release_recursive(_lock_t *lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return;
+    }
+    _lock_release_recursive(lock);
+}
+
+IRAM_ATTR void sys___retarget_lock_acquire(_LOCK_T lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return;
+    }
+    __retarget_lock_acquire(lock);
+}
+
+IRAM_ATTR void sys___retarget_lock_acquire_recursive(_LOCK_T lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return;
+    }
+    __retarget_lock_acquire_recursive(lock);
+}
+
+IRAM_ATTR int sys___retarget_lock_try_acquire(_LOCK_T lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return -1;
+    }
+    return __retarget_lock_try_acquire(lock);
+}
+
+IRAM_ATTR int sys___retarget_lock_try_acquire_recursive(_LOCK_T lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return -1;
+    }
+    return __retarget_lock_try_acquire_recursive(lock);
+}
+
+IRAM_ATTR void sys___retarget_lock_release_recursive(_LOCK_T lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return;
+    }
+    __retarget_lock_release_recursive(lock);
+}
+
+IRAM_ATTR void sys___retarget_lock_release(_LOCK_T lock)
+{
+    if (!is_valid_udram_addr(lock)) {
+        return;
+    }
+    __retarget_lock_release(lock);
 }
 
 void sys_esp_time_impl_set_boot_time(uint64_t time_us)
@@ -1823,6 +1920,46 @@ bool sys_esp_timer_is_active(esp_timer_handle_t timer)
 int64_t IRAM_ATTR sys_esp_system_get_time(void)
 {
     return esp_system_get_time();
+}
+
+esp_err_t sys_uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags)
+{
+    if (!is_valid_udram_addr((void *)uart_queue)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    QueueHandle_t sys_uart_queue = NULL;
+    esp_err_t ret = uart_driver_install(uart_num, rx_buffer_size, tx_buffer_size, queue_size, &sys_uart_queue, intr_alloc_flags);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    uart_driver_queue_index[uart_num] = esp_map_add(sys_uart_queue, ESP_MAP_QUEUE_ID);
+    *uart_queue = (QueueHandle_t)uart_driver_queue_index[uart_num];
+    return ESP_OK;
+}
+
+esp_err_t sys_uart_driver_delete(uart_port_t uart_num)
+{
+    esp_err_t ret = uart_driver_delete(uart_num);
+    if (ret == ESP_OK) {
+        esp_map_remove(uart_driver_queue_index[uart_num]);
+    }
+    return ret;
+}
+
+int sys_uart_write_bytes(uart_port_t uart_num, const void* src, size_t size)
+{
+    if (!is_valid_user_d_addr((void *)src) || !is_valid_user_d_addr((void *)((int)src + size))) {
+        return -1;
+    }
+    return uart_write_bytes(uart_num, src, size);
+}
+
+int sys_uart_read_bytes(uart_port_t uart_num, void* buf, uint32_t length, TickType_t ticks_to_wait)
+{
+    if (!is_valid_udram_addr(buf) || !is_valid_udram_addr((void *)((int)buf + length))) {
+        return -1;
+    }
+    return uart_read_bytes(uart_num, buf, length, ticks_to_wait);
 }
 
 IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, usr_custom_app_desc_t *app_desc)
