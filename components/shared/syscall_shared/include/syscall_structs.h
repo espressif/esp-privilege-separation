@@ -96,6 +96,12 @@ typedef struct {
     usr_dispatch_data_t dispatch_data;
 } usr_dispatch_ctx_t;
 
+typedef struct {
+    int free_heap_size;
+    int largest_free_block;
+    int min_free_heap;
+} protected_heap_stats_t;
+
 #ifdef __cplusplus
 }
 #endif

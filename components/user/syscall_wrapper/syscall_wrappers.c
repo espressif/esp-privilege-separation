@@ -938,6 +938,11 @@ int usr_uart_read_bytes(uart_port_t uart_num, void* buf, uint32_t length, TickTy
     return EXECUTE_SYSCALL(uart_num, buf, length, ticks_to_wait, __NR_uart_read_bytes);
 }
 
+esp_err_t usr_esp_get_protected_heap_stats(protected_heap_stats_t *stats)
+{
+    return EXECUTE_SYSCALL(stats, __NR_esp_get_protected_heap_stats);
+}
+
 UIRAM_ATTR bool usr_spi_flash_cache_enabled(void)
 {
     // Flash cache will always be enabled in user app.

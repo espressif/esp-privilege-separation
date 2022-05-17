@@ -1962,6 +1962,17 @@ int sys_uart_read_bytes(uart_port_t uart_num, void* buf, uint32_t length, TickTy
     return uart_read_bytes(uart_num, buf, length, ticks_to_wait);
 }
 
+esp_err_t sys_esp_get_protected_heap_stats(protected_heap_stats_t *stats)
+{
+    if (!is_valid_udram_addr(stats)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    stats->free_heap_size = heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    stats->largest_free_block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    stats->min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    return ESP_OK;
+}
+
 IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, usr_custom_app_desc_t *app_desc)
 {
     usr_task_ctx_t task_ctx = {};

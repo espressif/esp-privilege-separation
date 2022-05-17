@@ -187,3 +187,6 @@
 1051  common  uart_driver_delete                      sys_uart_driver_delete
 1052  common  uart_write_bytes                        sys_uart_write_bytes
 1053  common  uart_read_bytes                         sys_uart_read_bytes
+
+
+1054  custom  esp_get_protected_heap_stats            sys_esp_get_protected_heap_stats
