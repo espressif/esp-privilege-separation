@@ -1,4 +1,4 @@
-// Copyright 2020-2022 Espressif Systems (Shanghai) PTE LTD
+// Copyright 2022 Espressif Systems (Shanghai) PTE LTD
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,14 @@
 // limitations under the License.
 
 #pragma once
+
+#include "sys/queue.h"
+#include "hal/gpio_types.h"
+#include "driver/gpio.h"
+#include "esp_timer.h"
+#include "esp_event_base.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/timers.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,7 +40,7 @@ typedef struct {
 } usr_context_t;
 
 typedef struct {
-    usr_esp_event_base_t event_base;
+    esp_event_base_t event_base;
     int32_t event_id;
     void *event_data;
     usr_context_t usr_context;

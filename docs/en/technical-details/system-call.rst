@@ -35,7 +35,7 @@ Structure of a simple system call can be described as follows:
        ret                   -- Return from system call
 
 *List of supported system calls can be
-found*  \ :component_file:`here <../components/esp_syscall/syscall/syscall.tbl>`.
+found*  \ :component_file:`here <../components/protected/esp_syscall/syscall/syscall.tbl>`.
 
 .. _adding_system_call:
 
@@ -61,7 +61,7 @@ Create a .tbl file in example or component to declare custom system calls.
 2. Assign new system call number
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-System calls supported by the framework are present inside :component_file:`syscall.tbl <../components/esp_syscall/syscall/syscall.tbl>`. This default table along with custom system call table is parsed by scripts and generates relevant header
+System calls supported by the framework are present inside :component_file:`syscall.tbl <../components/protected/esp_syscall/syscall/syscall.tbl>`. This default table along with custom system call table is parsed by scripts and generates relevant header
 files which are used in applications. You will need to add your own system
 call entry in the custom table. Choose a number that isn't being used by the default system call table and
 add it in the table following the convention:
@@ -107,10 +107,10 @@ from user application:
 system call table. This macro is generated from a script and is placed
 in ``syscall_def.h`` file, created during build process.
 
-``EXECUTE_SYSCALL`` is a macro defined in :component_file:`syscall_priv.h <../components/esp_syscall/src/syscall_priv.h>` file.
+``EXECUTE_SYSCALL`` is a macro defined in :component_file:`syscall_macros.h <../components/user/syscall_wrapper/include/syscall_macros.h>` file.
 
 All such wrapper functions for default system calls are defined in
-:component_file:`syscall_wrappers.c <../components/esp_syscall/src/syscall_wrappers.c>`.
+:component_file:`syscall_wrappers.c <../components/user/syscall_wrapper/syscall_wrappers.c>`.
 
 .. _4-protected-system-call-implementation:
 
@@ -133,7 +133,7 @@ The name of the function should be the same as the name mentioned in the
 4th column in ``custom_syscall.tbl`` file.
 
 All the system call functions for default system calls are defined in
-:component_file:`esp_syscalls.c <../components/esp_syscall/src/esp_syscalls.c>`
+:component_file:`esp_syscalls.c <../components/protected/esp_syscall/src/esp_syscalls.c>`
 
 .. _5-build-system-changes-to-add-custom-system-calls:
 

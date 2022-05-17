@@ -1,9 +1,7 @@
 if(USER_APP_BUILD)
     set(srcs)
-    set(priv_includes)
 else()
     set(srcs
-        "src/syscall_wrappers.c"
         "src/esp_syscalls.c"
         "src/syscall_handler.S"
         "src/esp_map.c"
@@ -12,7 +10,6 @@ else()
 endif()
 
 set(includes
-    "include"
     "${CMAKE_CURRENT_BINARY_DIR}"
     )
 
@@ -20,7 +17,7 @@ set(includes
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
                     PRIV_INCLUDE_DIRS ${priv_include}
-                    REQUIRES esp_wifi nvs_flash esp-tls esp_priv_access)
+                    PRIV_REQUIRES esp_wifi nvs_flash esp_priv_access esp_priv_build_utils syscall_shared)
 
 set(syscallhdr_sh
     ${COMPONENT_DIR}/syscall/syscallhdr.sh ${CMAKE_CURRENT_BINARY_DIR}/syscall.tbl
@@ -31,7 +28,7 @@ set(syscalltbl_sh
     )
 
 set(syscall_def_h
-    ${CMAKE_CURRENT_BINARY_DIR}/syscall_def.h
+    ${CONFIG_DIR}/syscall_def.h
     )
 
 set(esp_syscall_h

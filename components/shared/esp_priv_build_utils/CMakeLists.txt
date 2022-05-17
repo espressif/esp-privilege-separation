@@ -1,19 +1,4 @@
-if(USER_APP_BUILD)
-    set(srcs)
-else()
-    set(srcs "esp_priv_access_image_utility.c"
-             "esp_priv_access_setup.c"
-             "esp_priv_access_panic.c")
-    if(CONFIG_PA_CONSOLE_ENABLE)
-        list(APPEND srcs "esp_priv_access_console.c"
-                         "esp_priv_access_commands.c")
-    endif()
-endif()
-
-idf_component_register(SRCS ${srcs}
-                    INCLUDE_DIRS "include"
-                    PRIV_INCLUDE_DIRS "."
-                    REQUIRES bootloader_support spi_flash app_update console)
+idf_component_register(INCLUDE_DIRS "include")
 
 if (USER_APP_BUILD)
 
@@ -47,9 +32,6 @@ if (USER_APP_BUILD)
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-u user_app_desc")
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-u custom_app_desc")
     target_link_libraries(${COMPONENT_LIB} INTERFACE "${DEFSYM_LIST}")
-
-    add_prebuilt_library(esp_syscall ${SYSCALL_LIB})
-    target_link_libraries(${COMPONENT_LIB} INTERFACE esp_syscall)
 
 else()
 

@@ -67,7 +67,7 @@ We propose implementing the driver in the protected application and exposing it 
 the traditional ESP-IDF driver which has peripheral specific esp_<periph>_init(), esp_<periph>_write(), etc.
 
 It is the responsibility of the protected app developer to encapsulate a driver in VFS function calls.
-For example, we have encapsulated the existing ESP-IDF SPI driver here :component_file:`drivers/spi/vfs_spi.c`.
+For example, we have encapsulated the existing ESP-IDF SPI driver here :component_file:`shared/drivers/spi/vfs_spi.c`.
 The system calls for file operation functions (open, etc) are already implemented so there is no need to register
 any extra system calls. Registering the VFS peripheral driver from the protected application is enough and user
 application can use it by simply calling the file system functions with the appropriate path.
