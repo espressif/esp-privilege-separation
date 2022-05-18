@@ -1,3 +1,40 @@
+diff --git a/components/esp32c3/CMakeLists.txt b/components/esp32c3/CMakeLists.txt
+index 393464f5ab..eeec4fd178 100644
+--- a/components/esp32c3/CMakeLists.txt
++++ b/components/esp32c3/CMakeLists.txt
+@@ -43,9 +43,12 @@ else()
+ 
+     target_linker_script(${COMPONENT_LIB} INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/esp32c3_out.ld")
+ 
++    set(project_ld_input "${CMAKE_CURRENT_LIST_DIR}/ld/esp32c3.project.ld.in")
++    set(project_ld_output "${CMAKE_CURRENT_BINARY_DIR}/ld/esp32c3.project.preprocess.ld")
++
+     # Process the template file through the linker script generation mechanism, and use the output for linking the
+     # final binary
+-    target_linker_script(${COMPONENT_LIB} INTERFACE "${CMAKE_CURRENT_LIST_DIR}/ld/esp32c3.project.ld.in"
++    target_linker_script(${COMPONENT_LIB} INTERFACE ${project_ld_output}
+             PROCESS "${CMAKE_CURRENT_BINARY_DIR}/ld/esp32c3.project.ld")
+     target_linker_script(${COMPONENT_LIB} INTERFACE "ld/esp32c3.peripherals.ld")
+ 
+@@ -56,14 +59,16 @@ else()
+     # Preprocess esp32c3.ld linker script to include configuration, becomes esp32c3_out.ld
+     set(LD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ld)
+     add_custom_command(
+-        OUTPUT esp32c3_out.ld
++        OUTPUT esp32c3_out.ld ${project_ld_output}
+         COMMAND "${CMAKE_C_COMPILER}" -C -P -x c -E -o esp32c3_out.ld -I ${config_dir} ${LD_DIR}/esp32c3.ld
++        COMMAND "${CMAKE_C_COMPILER}" -C -P -x c -E -o ${project_ld_output} -I ${config_dir}
++                -I "${CMAKE_CURRENT_LIST_DIR}" ${project_ld_input}
+         MAIN_DEPENDENCY ${LD_DIR}/esp32c3.ld
+         DEPENDS ${sdkconfig_header}
+         COMMENT "Generating linker script..."
+         VERBATIM)
+ 
+-    add_custom_target(esp32c3_linker_script DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/esp32c3_out.ld)
++    add_custom_target(esp32c3_linker_script DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/esp32c3_out.ld ${project_ld_output})
+     add_dependencies(${COMPONENT_LIB} esp32c3_linker_script)
+ 
+     # disable stack protection in files which are involved in initialization of that feature
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
 index 296427721a..fae596b796 100644
 --- a/components/esp32c3/Kconfig
@@ -17,6 +54,59 @@ index 296427721a..fae596b796 100644
 +            Enable user kernel separation
 +
  endmenu  # ESP32C3-Specific
+diff --git a/components/esp32c3/ld/esp32c3.project.ld.in b/components/esp32c3/ld/esp32c3.project.ld.in
+index 21d5845b36..9f9510fe29 100644
+--- a/components/esp32c3/ld/esp32c3.project.ld.in
++++ b/components/esp32c3/ld/esp32c3.project.ld.in
+@@ -1,3 +1,6 @@
++#include "sdkconfig.h"
++#define ROM_DRAM_RESERVE_START          0x3FCDF060
++
+ /* Default entry point */
+ ENTRY(call_start_cpu0);
+ 
+@@ -132,6 +135,13 @@ SECTIONS
+   .iram0.text :
+   {
+     _iram_start = ABSOLUTE(.);
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    _reserve_w1_iram_start = ABSOLUTE(.);
++    . += CONFIG_PA_ALLOCATE_USER_IRAM_SIZE;
++    . += 16;
++    . = ALIGN (0x200);
++    _reserve_w1_iram_end = ABSOLUTE(.);
++#endif
+     /* Vectors go to start of IRAM */
+     ASSERT(ABSOLUTE(.) % 0x100 == 0, "vector address must be 256 byte aligned");
+     KEEP(*(.exception_vectors.text));
+@@ -248,6 +258,27 @@ SECTIONS
+     _bss_end = ABSOLUTE(.);
+   } > dram0_0_seg
+ 
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++  .reserve_w1_dram (NOLOAD) :
++  {
++     /* Assign W1 DRAM start address as per the size configured in Kconfig.
++      * 0x3FCDF060 - 0x3FCE0000 space is reserved for ROM code so to avoid
++      * overlapping for reserved memory regions, treat 0x3FCDF060 as the end of DRAM region
++      */
++#if CONFIG_PA_MEMORY_ALLOCATE_PROTECTED
++     _reserve_w1_dram_start = ABSOLUTE(_data_start + CONFIG_PA_ALLOCATE_DRAM_SIZE);
++#elif CONFIG_PA_MEMORY_ALLOCATE_USER
++     _reserve_w1_dram_start = ABSOLUTE(ROM_DRAM_RESERVE_START - CONFIG_PA_ALLOCATE_DRAM_SIZE);
++#endif
++     /* Align the starting boundary to 512 bytes as it is a requirement for the PMS split line */
++     _reserve_w1_dram_start = ABSOLUTE((_reserve_w1_dram_start + 0x200 - 1) & ~(0x200 - 1));
++     _reserve_w1_dram_end = ABSOLUTE(ROM_DRAM_RESERVE_START);
++  } > dram0_0_seg
++
++  ASSERT((_heap_start <= _reserve_w1_dram_start),
++          "Protected DRAM segment contents does not fit.")
++#endif
++
+   ASSERT(((_bss_end - ORIGIN(dram0_0_seg)) <= LENGTH(dram0_0_seg)), "DRAM segment data does not fit.")
+ 
+   .flash.text :
 diff --git a/components/hal/interrupt_controller_hal.c b/components/hal/interrupt_controller_hal.c
 index f7e815beff..e50c0db74d 100644
 --- a/components/hal/interrupt_controller_hal.c
@@ -343,15 +433,3 @@ index 490178e53a..2ca18c7d04 100755
                     '-ex', "target remote | \"{python}\" \"{script}\" --target {target} \"{output_file}\""
                     .format(python=sys.executable,
                             script=panic_output_decode_script,
-diff --git a/tools/idf_py_actions/tools.py b/tools/idf_py_actions/tools.py
-index 688223ff3a..cd7abc2f03 100644
---- a/tools/idf_py_actions/tools.py
-+++ b/tools/idf_py_actions/tools.py
-@@ -199,6 +199,7 @@ def ensure_build_directory(args, prog_name, always_run_cmake=False):
-         try:
-             cmake_args = [
-                 'cmake',
-+                '-Wno-dev',
-                 '-G',
-                 args.generator,
-                 '-DPYTHON_DEPS_CHECKED=1',
