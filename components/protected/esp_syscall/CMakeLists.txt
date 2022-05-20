@@ -1,22 +1,17 @@
-if(USER_APP_BUILD)
-    set(srcs)
-else()
-    set(srcs
-        "src/esp_syscalls.c"
-        "src/syscall_handler.S"
-        "src/esp_map.c"
-        "src/esp_syscall_table.c")
-    set(priv_include "priv_include")
-endif()
+set(srcs
+   "src/esp_syscalls.c"
+   "src/syscall_handler.S"
+   "src/esp_map.c"
+   "src/esp_syscall_table.c")
 
 set(includes
     "${CMAKE_CURRENT_BINARY_DIR}"
+    "include"
     )
 
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
-                    PRIV_INCLUDE_DIRS ${priv_include}
                     PRIV_REQUIRES esp_wifi nvs_flash esp_priv_access esp_priv_build_utils syscall_shared driver)
 
 set(syscallhdr_sh
