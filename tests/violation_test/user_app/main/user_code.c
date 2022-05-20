@@ -32,14 +32,14 @@
 #define BLINK_GPIO      GPIO_NUM_4
 
 extern uint32_t _user_data_start;
-extern uint32_t _user_text_start;
+extern uint32_t _user_text_end;
 extern uint32_t _user_xip_text_start;
 
 void iram_violation_task()
 {
-    uint32_t start = (uint32_t)&_user_text_start;
+    uint32_t end = (uint32_t)&_user_text_end;
 
-    void (*forbidden_iram)(void) = (void(*)(void))(start - 0x1000);
+    void (*forbidden_iram)(void) = (void(*)(void))(end + 0x1000);
 
     forbidden_iram();
 
