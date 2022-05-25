@@ -59,6 +59,8 @@
 typedef void (*syscall_t)(void);
 typedef void* usr_gpio_handle_t;
 
+static const char *USER_TIMER_STRING = "user_timer";
+
 /* These are the indexes in esp_event_map_arr to store the user space EVENT base.
  * This is required because esp_event_base_t is a string pointer and it is different for protected space
  * as well as user space, so if the user wants to register an event handler for an event handled in protected space,
@@ -277,9 +279,27 @@ int sys_xTaskCreate(TaskFunction_t pvTaskCode,
                                    const BaseType_t xCoreID,
                                    usr_task_ctx_t *task_ctx)
 {
+    static bool _is_user_app_up;
+
     if (!is_valid_user_i_addr(pvTaskCode)) {
         ESP_LOGE(TAG, "Incorrect address of user function");
         return pdFAIL;
+    }
+
+    /* The first user task will be spawn from the protected application so
+     * the name and the task context will be from protected space
+     */
+    if (_is_user_app_up) {
+        if (!is_valid_udram_addr((void *)task_ctx)) {
+            ESP_LOGE(TAG, "Invalid user task context %p", task_ctx);
+            return pdFAIL;
+        }
+
+        if (!is_valid_user_d_addr((void *)pcName) ||
+                !is_valid_user_d_addr((void *)((int)pcName + CONFIG_FREERTOS_MAX_TASK_NAME_LEN))) {
+            ESP_LOGE(TAG, "Invalid user task name");
+            return pdFAIL;
+        }
     }
 
     TaskHandle_t handle;
@@ -294,8 +314,10 @@ int sys_xTaskCreate(TaskFunction_t pvTaskCode,
         return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     }
 
+    const int stack_size = task_ctx->stack_size;
+
     xtaskStack = (StackType_t *)task_ctx->stack;
-    if (!is_valid_udram_addr(xtaskStack)) {
+    if (!is_valid_udram_addr((void *)xtaskStack) || !is_valid_udram_addr((void *)((int)xtaskStack + stack_size))) {
         ESP_LOGE(TAG, "Invalid memory for user stack");
         err = pdFAIL;
         goto failure;
@@ -328,7 +350,7 @@ int sys_xTaskCreate(TaskFunction_t pvTaskCode,
      * We need to first set the kernel stack as a TLS and only then it should be executed
      */
     vTaskSuspendAll();
-    handle = xTaskCreateStaticPinnedToCore(pvTaskCode, pcName, task_ctx->stack_size, pvParameters, uxPriority, xtaskStack, xtaskTCB, xCoreID);
+    handle = xTaskCreateStaticPinnedToCore(pvTaskCode, pcName, stack_size, pvParameters, uxPriority, xtaskStack, xtaskTCB, xCoreID);
 
     wrapper_handle->handle = handle;
 
@@ -346,6 +368,10 @@ int sys_xTaskCreate(TaskFunction_t pvTaskCode,
     if (is_valid_udram_addr(task_ctx->task_handle)) {
         *(TaskHandle_t *)(task_ctx->task_handle) = (TaskHandle_t)wrapper_index;
     }
+
+    if (!_is_user_app_up) {
+        _is_user_app_up = 1;
+    };
 
     return err;
 failure:
@@ -426,6 +452,9 @@ void sys_vTaskDelay(TickType_t TickstoWait)
 
 void sys_vTaskDelayUntil(TickType_t * const pxPreviousWakeTime, const TickType_t xTimeIncrement)
 {
+    if (!is_valid_udram_addr(pxPreviousWakeTime)) {
+        return;
+    }
     vTaskDelayUntil(pxPreviousWakeTime, xTimeIncrement);
 }
 
@@ -562,10 +591,14 @@ BaseType_t sys_xTaskGenericNotify(TaskHandle_t xTaskToNotify, uint32_t ulValue, 
 BaseType_t sys_xTaskGenericNotify(TaskHandle_t xTaskToNotify, UBaseType_t uxIndexToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue)
 #endif
 {
+    if (!is_valid_udram_addr(pulPreviousNotificationValue)) {
+        return pdFAIL;
+    }
+
     int wrapper_index = (int)xTaskToNotify;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
     if (wrapper_handle == NULL) {
-        return -1;
+        return 0;
     }
 #if defined(IDF_VERSION_V4_3)
     return xTaskGenericNotify((TaskHandle_t)wrapper_handle->handle, ulValue, eAction, pulPreviousNotificationValue);
@@ -580,6 +613,14 @@ BaseType_t sys_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, uint32_t ul
 BaseType_t sys_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, UBaseType_t uxIndexToNotify, uint32_t ulValue, eNotifyAction eAction, uint32_t *pulPreviousNotificationValue, BaseType_t *pxHigherPriorityTaskWoken)
 #endif
 {
+    if (!is_valid_udram_addr(pulPreviousNotificationValue)) {
+        return pdFAIL;
+    }
+
+    if (!is_valid_udram_addr(pxHigherPriorityTaskWoken) && pxHigherPriorityTaskWoken != NULL) {
+        return pdFAIL;
+    }
+
     int wrapper_index = (int)xTaskToNotify;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
     if (wrapper_handle == NULL) {
@@ -594,11 +635,16 @@ BaseType_t sys_xTaskGenericNotifyFromISR(TaskHandle_t xTaskToNotify, UBaseType_t
 
 void sys_vTaskNotifyGiveFromISR(TaskHandle_t xTaskToNotify, BaseType_t *pxHigherPriorityTaskWoken)
 {
+    if (!is_valid_udram_addr(pxHigherPriorityTaskWoken) && pxHigherPriorityTaskWoken != NULL) {
+        return;
+    }
+
     int wrapper_index = (int)xTaskToNotify;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_TASK_ID);
     if (wrapper_handle == NULL) {
         return;
     }
+
     vTaskNotifyGiveFromISR((TaskHandle_t)wrapper_handle->handle, pxHigherPriorityTaskWoken);
 }
 
@@ -609,6 +655,10 @@ uint32_t sys_ulTaskNotifyTake(BaseType_t xClearCountOnExit, TickType_t xTicksToW
 
 BaseType_t sys_xTaskNotifyWait(uint32_t ulBitsToClearOnEntry, uint32_t ulBitsToClearOnExit, uint32_t *pulNotificationValue, TickType_t xTicksToWait)
 {
+    if (!is_valid_udram_addr(pulNotificationValue)) {
+        ESP_LOGE(TAG, "Invalid pulNotificationValue pointer");
+        return pdFAIL;
+    }
     return xTaskNotifyWait(ulBitsToClearOnEntry, ulBitsToClearOnExit, pulNotificationValue, xTicksToWait);
 }
 
@@ -830,6 +880,10 @@ BaseType_t sys_xQueueGenericSend(QueueHandle_t xQueue, const void * const pvItem
 
 BaseType_t sys_xQueueGenericSendFromISR(QueueHandle_t xQueue, const void * const pvItemToQueue, BaseType_t * const pxHigherPriorityTaskWoken, const BaseType_t xCopyPosition)
 {
+    if (!is_valid_udram_addr((void *)pxHigherPriorityTaskWoken) && pxHigherPriorityTaskWoken != NULL) {
+        return 0;
+    }
+
     if (is_valid_user_d_addr((void *)pvItemToQueue)) {
         int wrapper_index = (int)xQueue;
         esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
@@ -857,6 +911,10 @@ int sys_xQueueReceive(QueueHandle_t xQueue, void * const buffer, TickType_t Tick
 
 BaseType_t sys_xQueueReceiveFromISR(QueueHandle_t xQueue, void * const pvBuffer, BaseType_t * const pxHigherPriorityTaskWoken)
 {
+    if (!is_valid_udram_addr((void *)pxHigherPriorityTaskWoken) && pxHigherPriorityTaskWoken != NULL) {
+        return 0;
+    }
+
     if (is_valid_udram_addr((void *)pvBuffer)) {
         int wrapper_index = (int)xQueue;
         esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
@@ -1087,6 +1145,10 @@ BaseType_t sys_xQueueGiveMutexRecursive(QueueHandle_t xMutex)
 
 BaseType_t sys_xQueueGiveFromISR(QueueHandle_t xQueue, BaseType_t * const pxHigherPriorityTaskWoken)
 {
+    if (!is_valid_udram_addr((void *)pxHigherPriorityTaskWoken) && pxHigherPriorityTaskWoken != NULL) {
+        return pdFAIL;
+    }
+
     int wrapper_index = (int)xQueue;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_QUEUE_ID);
     if (wrapper_handle == NULL) {
@@ -1120,6 +1182,10 @@ TimerHandle_t sys_xTimerCreate(const char * const pcTimerName,
 {
     TimerHandle_t handle;
     int wrapper_index = 0;
+
+    /* pcTimerName is never used by FreeRTOS kernel. It is just for debugging purpose by the application.
+     * We have system call for `pcTimerGetName` so we cannot replace the timer name with our name
+     */
 
     if (!(is_valid_user_i_addr(pxCallbackFunction))) {
         ESP_LOGE(TAG, "Incorrect address space for callback function or user queue");
@@ -1194,6 +1260,10 @@ void sys_vTimerSetReloadMode(TimerHandle_t xTimer, const UBaseType_t uxAutoReloa
 
 BaseType_t sys_xTimerGenericCommand(TimerHandle_t xTimer, const BaseType_t xCommandID, const TickType_t xOptionalValue, BaseType_t * const pxHigherPriorityTaskWoken, const TickType_t xTicksToWait)
 {
+    if (!is_valid_udram_addr((void *)pxHigherPriorityTaskWoken) && pxHigherPriorityTaskWoken != NULL) {
+        return pdFAIL;
+    }
+
     int wrapper_index = (int)xTimer;
     esp_map_handle_t *wrapper_handle = esp_map_verify(wrapper_index, ESP_MAP_XTIMER_ID);
     if (wrapper_handle == NULL) {
@@ -1311,6 +1381,9 @@ int sys_lwip_socket(int domain, int type, int protocol)
 
 int sys_lwip_connect(int s, const struct sockaddr *name, socklen_t namelen)
 {
+    if (!is_valid_udram_addr((void *)name)) {
+        return -1;
+    }
     return lwip_connect(s, name, namelen);
 }
 
@@ -1384,11 +1457,18 @@ int sys_lwip_getsockname(int s, struct sockaddr *name, socklen_t *namelen)
 
 int sys_lwip_setsockopt(int s, int level, int optname, const void *optval, socklen_t optlen)
 {
+    if (!is_valid_udram_addr((void *)optval) || !is_valid_udram_addr((void *)((int)optval + optlen))) {
+        return -1;
+    }
     return lwip_setsockopt(s, level, optname, optval, optlen);
 }
 
 int sys_lwip_getsockopt(int s, int level, int optname, void *optval, socklen_t *optlen)
 {
+    if (!is_valid_udram_addr((void *)optval) || !is_valid_udram_addr((void *)optlen)) {
+        return -1;
+    }
+
     return lwip_getsockopt(s, level, optname, optval, optlen);
 }
 
@@ -1399,6 +1479,9 @@ int sys_lwip_listen(int s, int backlog)
 
 size_t sys_lwip_recv(int s, void *mem, size_t len, int flags)
 {
+    if (!is_valid_udram_addr(mem) || !is_valid_udram_addr((void *)((int)mem + len))) {
+        return -1;
+    }
     return lwip_recv(s, mem, len, flags);
 }
 
@@ -1416,7 +1499,7 @@ ssize_t sys_lwip_recvmsg(int s, struct msghdr *message, int flags)
 
 ssize_t sys_lwip_recvfrom(int s, void *mem, size_t len, int flags, struct sockaddr *from, socklen_t *fromlen)
 {
-    if (!is_valid_udram_addr((void *)mem) ||
+    if (!is_valid_udram_addr((void *)mem) || !is_valid_udram_addr((void *)((int)mem + len)) ||
         !is_valid_udram_addr((void *)from) ||
         !is_valid_udram_addr((void *)fromlen)) {
         return -1;
@@ -1427,6 +1510,9 @@ ssize_t sys_lwip_recvfrom(int s, void *mem, size_t len, int flags, struct sockad
 
 size_t sys_lwip_send(int s, const void *data, size_t size, int flags)
 {
+    if (!is_valid_user_d_addr((void *)data) || !is_valid_user_d_addr((void *)((int)data + size))) {
+        return -1;
+    }
     return lwip_send(s, data, size, flags);
 }
 
@@ -1444,7 +1530,7 @@ ssize_t sys_lwip_sendmsg(int s, const struct msghdr *msg, int flags)
 
 ssize_t sys_lwip_sendto(int s, const void *data, size_t size, int flags, const struct sockaddr *to, socklen_t tolen)
 {
-    if (!is_valid_user_d_addr((void *)data) ||
+    if (!is_valid_user_d_addr((void *)data) || !is_valid_user_d_addr((void *)((int)data + size)) ||
         !is_valid_user_d_addr((void *)to)) {
         return -1;
     }
@@ -1508,7 +1594,7 @@ int sys_open(const char *path, int flags, int mode)
 
 int sys_write(int s, const void *data, size_t size)
 {
-    if (is_valid_user_d_addr((void *)data)) {
+    if (is_valid_user_d_addr((void *)data) && is_valid_user_d_addr((void *)((int)data + size))) {
         return write(s, data, size);
     }
     return -1;
@@ -1516,7 +1602,7 @@ int sys_write(int s, const void *data, size_t size)
 
 int sys_read(int s, void *mem, size_t len)
 {
-    if (is_valid_udram_addr(mem)) {
+    if (is_valid_udram_addr(mem) && is_valid_udram_addr((void *)((int)mem + len))) {
         return read(s, mem, len);
     }
     return -1;
@@ -1702,6 +1788,17 @@ esp_err_t sys_esp_event_handler_instance_register(esp_event_base_t event_base,
 {
     esp_err_t ret;
     esp_event_base_t sys_event_base;
+
+    /* Check the end of event_base string before actually comparing the string with
+     * pre-registered events
+     */
+    if (!is_valid_user_d_addr((void *)event_base) ||
+        !is_valid_user_d_addr((void *)((int)event_base + strlen(WIFI_EVENT))) ||
+        !is_valid_user_d_addr((void *)((int)event_base + strlen(IP_EVENT)))) {
+        ESP_LOGE(TAG, "Invalid event base");
+        return ESP_ERR_INVALID_ARG;
+    }
+
     if (strncmp(WIFI_EVENT, event_base, strlen(WIFI_EVENT)) == 0) {
         sys_event_base = WIFI_EVENT;
         esp_event_map_arr[WIFI_EVENT_INDEX] = event_base;
@@ -1740,6 +1837,16 @@ esp_err_t sys_esp_event_handler_instance_unregister(esp_event_base_t event_base,
 {
     esp_err_t ret;
     esp_event_base_t sys_event_base;
+
+    /* Check the end of event_base string before actually comparing the string with
+     * pre-registered events
+     */
+    if (!is_valid_user_d_addr((void *)event_base) ||
+        !is_valid_user_d_addr((void *)((int)event_base + strlen(WIFI_EVENT))) ||
+        !is_valid_user_d_addr((void *)((int)event_base + strlen(IP_EVENT)))) {
+        ESP_LOGE(TAG, "Invalid event base");
+        return ESP_ERR_INVALID_ARG;
+    }
     if (strncmp(WIFI_EVENT, event_base, strlen(WIFI_EVENT)) == 0) {
         sys_event_base = WIFI_EVENT;
     } else if (strncmp(IP_EVENT, event_base, strlen(IP_EVENT)) == 0) {
@@ -1796,7 +1903,7 @@ IRAM_ATTR uint32_t sys_esp_random(void)
 
 void sys_esp_fill_random(void *buf, size_t len)
 {
-    if (!is_valid_udram_addr(buf)) {
+    if (!is_valid_udram_addr(buf) || !is_valid_udram_addr((void *)((int)buf + len))) {
         return;
     }
     esp_fill_random(buf, len);
@@ -1824,6 +1931,7 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
             !is_valid_udram_addr(out_handle)) {
         return ESP_ERR_INVALID_ARG;
     }
+
     esp_timer_create_args_t *usr_args = (esp_timer_create_args_t *)heap_caps_malloc(sizeof(esp_timer_create_args_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
     if (!usr_args) {
         return ESP_ERR_NO_MEM;
@@ -1832,7 +1940,13 @@ esp_err_t sys_esp_timer_create(const esp_timer_create_args_t* create_args,
     const esp_timer_create_args_t sys_create_args = {
         .callback = sys_esp_timer_dispatch_cb,
         .arg = usr_args,
-        .name = create_args->name,
+        /* The `name` field is only used in esp_timer_dump and this function can only be called from
+         * protected application so we can safely replace the user provide timer name with our own
+         * name to ensure that no illegal access happens when accessing this string
+         *
+         * Revisit this when the strings pointers are correctly handled: US-83
+         */
+        .name = USER_TIMER_STRING,
         .skip_unhandled_events = create_args->skip_unhandled_events,
     };
     esp_timer_handle_t sys_timer_handle = NULL;
