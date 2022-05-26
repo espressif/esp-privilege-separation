@@ -35,6 +35,10 @@
 
 #include "syscall_structs.h"
 
+#ifdef CONFIG_PA_CONSOLE_ENABLE
+#include "user_console.h"
+#endif
+
 #define CLEANUP_TASK_STACK_SIZE     1024
 #define CLEANUP_TASK_PRIO           20
 #define DISPATCHER_TASK_PRIO 22
@@ -223,6 +227,9 @@ void _user_main()
     _is_heap_initialized = 1;
     user_cleanup_service_init();
     user_dispatch_service_init();
+#ifdef CONFIG_PA_CONSOLE_ENABLE
+    user_console_init();
+#endif
     user_main();
     vTaskDelete(NULL);
 }

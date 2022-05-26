@@ -8,10 +8,22 @@
 5   common  esp_rom_md5_init                        sys_esp_rom_md5_init
 6   common  esp_rom_md5_update                      sys_esp_rom_md5_update
 7   common  esp_rom_md5_final                       sys_esp_rom_md5_final
-8   common  _lock_acquire                           sys__lock_acquire
-9   common  _lock_release                           sys__lock_release
-10  common  esp_time_impl_set_boot_time             sys_esp_time_impl_set_boot_time
-11  common  esp_time_impl_get_boot_time             sys_esp_time_impl_get_boot_time
+8   common  esp_rom_uart_tx_one_char                sys_esp_rom_uart_tx_one_char
+9   common  esp_rom_uart_rx_one_char                sys_esp_rom_uart_rx_one_char
+10  common  _lock_acquire                           sys__lock_acquire
+11  common  _lock_acquire_recursive                 sys__lock_acquire_recursive
+12  common  _lock_try_acquire                       sys__lock_try_acquire
+13  common  _lock_try_acquire_recursive             sys__lock_try_acquire_recursive
+14  common  _lock_release                           sys__lock_release
+15  common  _lock_release_recursive                 sys__lock_release_recursive
+16  common  __retarget_lock_acquire                 sys___retarget_lock_acquire
+17  common  __retarget_lock_acquire_recursive       sys___retarget_lock_acquire_recursive
+18  common  __retarget_lock_try_acquire             sys___retarget_lock_try_acquire
+19  common  __retarget_lock_try_acquire_recursive   sys___retarget_lock_try_acquire_recursive
+20  common  __retarget_lock_release                 sys___retarget_lock_release
+21  common  __retarget_lock_release_recursive       sys___retarget_lock_release_recursive
+22  common  esp_time_impl_set_boot_time             sys_esp_time_impl_set_boot_time
+23  common  esp_time_impl_get_boot_time             sys_esp_time_impl_get_boot_time
 
 # FreeRTOS
 256  common  xTaskCreatePinnedToCore                 sys_xTaskCreate
@@ -169,3 +181,12 @@
 1047  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
 1048  common  esp_timer_is_active                     sys_esp_timer_is_active
 1049  common  esp_system_get_time                     sys_esp_system_get_time
+
+# UART
+1050  common  uart_driver_install                     sys_uart_driver_install
+1051  common  uart_driver_delete                      sys_uart_driver_delete
+1052  common  uart_write_bytes                        sys_uart_write_bytes
+1053  common  uart_read_bytes                         sys_uart_read_bytes
+
+
+1054  custom  esp_get_protected_heap_stats            sys_esp_get_protected_heap_stats

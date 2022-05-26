@@ -41,10 +41,6 @@
 #include "esp32c3/rom/cache.h"
 #include "esp_heap_caps_init.h"
 
-#ifdef CONFIG_PA_CONSOLE_ENABLE
-#include "esp_priv_access_console.h"
-#endif
-
 static const char *TAG = "esp_priv_access";
 #define RV_INT_NUM      2
 
@@ -314,10 +310,6 @@ esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
     esp_priv_access_flash_cache_config();
 
     esp_priv_access_revoke_world1_peripheral_permissions();
-
-#ifdef CONFIG_PA_CONSOLE_ENABLE
-    esp_priv_access_console_init();
-#endif
 
     return ESP_OK;
 }

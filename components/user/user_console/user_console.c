@@ -20,9 +20,9 @@
 #include <freertos/queue.h>
 #include <driver/uart.h>
 
-#include <esp_priv_access_console.h>
+#include <user_console.h>
 
-static const char *TAG = "esp_priv_access_console";
+static const char *TAG = "user_console";
 
 static void scli_task(void *arg)
 {
@@ -43,7 +43,6 @@ static void scli_task(void *arg)
             .max_cmdline_length = 256,
     };
     esp_console_init(&console_config);
-    esp_console_register_help_command();
 
     while (true) {
         if (first_done) {
@@ -102,7 +101,7 @@ static esp_err_t scli_init()
     return ESP_OK;
 }
 
-esp_err_t esp_priv_access_console_init()
+esp_err_t user_console_init()
 {
     esp_err_t ret = scli_init();
     if (ret != ESP_OK) {

@@ -4,10 +4,6 @@ else()
     set(srcs "esp_priv_access_image_utility.c"
              "esp_priv_access_setup.c"
              "esp_priv_access_panic.c")
-    if(CONFIG_PA_CONSOLE_ENABLE)
-        list(APPEND srcs "esp_priv_access_console.c"
-                         "esp_priv_access_commands.c")
-    endif()
 endif()
 
 idf_component_register(SRCS ${srcs}
