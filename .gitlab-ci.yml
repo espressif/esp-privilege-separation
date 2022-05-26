@@ -23,7 +23,7 @@ before_script:
 after_script:
   - esppool -r all
 
-.setup_idf: &setup_idf
+.setup_idf_v4_3: &setup_idf_v4_3
   # Cloning esp-idf
   - echo Cloning esp-idf - Started
   - git clone --recursive --branch v4.3.2 --depth 1 https://github.com/espressif/esp-idf.git
@@ -41,7 +41,43 @@ after_script:
   - git apply -v $CI_PROJECT_DIR/idf-patches/privilege-separation_support_v4.3.2.patch
   - popd
 
-build_examples:
+.setup_idf_v4_4: &setup_idf_v4_4
+  # Cloning esp-idf
+  - echo Cloning esp-idf - Started
+  - git clone --recursive --branch v4.4.1 --depth 1 https://github.com/espressif/esp-idf.git
+  - pushd esp-idf
+  - echo Cloning esp-idf - Done
+  # Running install.sh
+  - echo Running install.sh - Started
+  - ./install.sh
+  - echo Running install.sh - Done
+  # Running export.sh
+  - echo Running export.sh - Started
+  - . export.sh
+  - echo Running export.sh - Done
+  # Applying patch for v4.4
+  - git apply -v $CI_PROJECT_DIR/idf-patches/privilege-separation_support_v4.4.1.patch
+  - popd
+
+.build_examples: &build_examples
+  # Build blink
+  - pushd $CI_PROJECT_DIR/examples/blink
+  - idf.py build
+  - popd
+  # Build http_request
+  - pushd $CI_PROJECT_DIR/examples/http_request
+  - idf.py build
+  - popd
+  # Build https_request
+  - pushd $CI_PROJECT_DIR/examples/https_request
+  - idf.py build
+  - popd
+  # Build esp_http_client
+  - pushd $CI_PROJECT_DIR/examples/esp_http_client
+  - idf.py build
+  - popd
+
+build_examples_v4.3:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
@@ -54,25 +90,10 @@ build_examples:
     when: always
 
   script:
-    - *setup_idf
-    # Build blink
-    - pushd $CI_PROJECT_DIR/examples/blink
-    - idf.py build
-    - popd
-    # Build http_request
-    - pushd $CI_PROJECT_DIR/examples/http_request
-    - idf.py build
-    - popd
-    # Build https_request
-    - pushd $CI_PROJECT_DIR/examples/https_request
-    - idf.py build
-    - popd
-    # Build esp_http_client
-    - pushd $CI_PROJECT_DIR/examples/esp_http_client
-    - idf.py build
-    - popd
+    - *setup_idf_v4_3
+    - *build_examples
 
-build_tests:
+build_examples_v4.4:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
@@ -80,26 +101,72 @@ build_tests:
 
   artifacts:
     paths:
-     - ${CI_PIPELINE_ID}.tar.gz
+      - ${CI_PIPELINE_ID}.tar.gz
     expire_in: 2 days
     when: always
 
   script:
-    - *setup_idf
+    - *setup_idf_v4_4
+    - *build_examples
+
+build_tests_v4.3:
+  stage: build
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
+  tags:
+    - build_esppool
+
+  artifacts:
+    paths:
+     - ${CI_PIPELINE_ID}_v4.3.tar.gz
+    expire_in: 2 days
+    when: always
+
+  script:
+    - *setup_idf_v4_3
     # Build violation_test
     - pushd $CI_PROJECT_DIR/tests/violation_test
     - idf.py build
-    - tar -czvf ${CI_PIPELINE_ID}.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
-    - mv ${CI_PIPELINE_ID}.tar.gz $CI_PROJECT_DIR/
+    - tar -czvf ${CI_PIPELINE_ID}_v4.3.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
+    - mv ${CI_PIPELINE_ID}_v4.3.tar.gz $CI_PROJECT_DIR/
     - popd
 
-run_tests:
+build_tests_v4.4:
+  stage: build
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
+  tags:
+    - build_esppool
+
+  artifacts:
+    paths:
+     - ${CI_PIPELINE_ID}_v4.4.tar.gz
+    expire_in: 2 days
+    when: always
+
+  script:
+    - *setup_idf_v4_4
+    # Build violation_test
+    - pushd $CI_PROJECT_DIR/tests/violation_test
+    - idf.py build
+    - tar -czvf ${CI_PIPELINE_ID}_v4.4.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
+    - mv ${CI_PIPELINE_ID}_v4.4.tar.gz $CI_PROJECT_DIR/
+    - popd
+
+run_tests_v4.3:
   stage: test
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
     - test_esppool
   script:
-    - tar -xzf ${CI_PIPELINE_ID}.tar.gz
+    - tar -xzf ${CI_PIPELINE_ID}_v4.3.tar.gz
+    - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip esp32c3 --build $CI_PROJECT_DIR/build
+
+run_tests_v4.4:
+  stage: test
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
+  tags:
+    - test_esppool
+  script:
+    - tar -xzf ${CI_PIPELINE_ID}_v4.4.tar.gz
     - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip esp32c3 --build $CI_PROJECT_DIR/build
 
 build_docs:
