@@ -220,19 +220,6 @@ static void user_dispatch_service_init()
     }
 }
 
-static void do_user_ctors(void)
-{
-    extern void (*__init_array_start)(void);
-    extern void (*__init_array_end)(void);
-
-    void (**p)(void);
-
-    for (p = &__init_array_end - 1; p >= &__init_array_start; --p) {
-        ESP_EARLY_LOGD(TAG, "calling init function: %p", *p);
-        (*p)();
-    }
-}
-
 void _user_main()
 {
     usr_clear_bss();
@@ -240,7 +227,6 @@ void _user_main()
     _is_heap_initialized = 1;
     user_cleanup_service_init();
     user_dispatch_service_init();
-    do_user_ctors();
 #ifdef CONFIG_PA_CONSOLE_ENABLE
     user_console_init();
 #endif
