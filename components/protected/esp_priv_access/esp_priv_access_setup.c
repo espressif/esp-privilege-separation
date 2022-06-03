@@ -150,17 +150,17 @@ static void esp_priv_access_iram_config()
     permc_ll_icache_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_icache_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 
-    permc_ll_iram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_iram_start);
+    permc_ll_iram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_iram_end);
 
-    permc_ll_iram_set_split_line(PERMC_SPLIT_LINE_1, (intptr_t)&_reserve_w1_iram_start);
+    permc_ll_iram_set_split_line(PERMC_SPLIT_LINE_1, (intptr_t)&_reserve_w1_iram_end);
 
     permc_ll_iram_set_perm(PERMC_AREA_0, PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_iram_set_perm(PERMC_AREA_1, PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_iram_set_perm(PERMC_AREA_2, PERMC_WORLD_0, PERMC_ACCESS_ALL);
 
-    permc_ll_iram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
-    permc_ll_iram_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
-    permc_ll_iram_set_perm(PERMC_AREA_2, PERMC_WORLD_1, PERMC_ACCESS_ALL);
+    permc_ll_iram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_ALL);
+    permc_ll_iram_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+    permc_ll_iram_set_perm(PERMC_AREA_2, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 
     /* PMS_3 corresponds to region after the main split line, i.e entire DRAM */
     permc_ll_iram_set_perm(PERMC_AREA_3, PERMC_WORLD_0, PERMC_ACCESS_NONE);
