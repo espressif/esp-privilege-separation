@@ -191,3 +191,5 @@
 
 
 1055  custom  esp_get_protected_heap_stats            sys_esp_get_protected_heap_stats
+1056  custom  esp_user_ota_cancel_rollback            sys_esp_user_ota_cancel_rollback
+1057  custom  esp_ota_user_app                        sys_esp_ota_user_app

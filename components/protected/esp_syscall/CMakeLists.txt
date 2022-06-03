@@ -12,7 +12,7 @@ set(includes
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
-                    PRIV_REQUIRES esp_wifi nvs_flash esp_priv_access esp_priv_build_utils syscall_shared driver)
+                    PRIV_REQUIRES esp_wifi nvs_flash esp_priv_access esp_priv_build_utils syscall_shared driver esp_user_ota)
 
 set(syscallhdr_sh
     ${COMPONENT_DIR}/syscall/syscallhdr.sh ${CMAKE_CURRENT_BINARY_DIR}/syscall.tbl
