@@ -70,6 +70,8 @@ _Static_assert(CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS >= 5, "FreeRTOS Thr
 #define queueQUEUE_TYPE_CLEANUP         250
 #define queueQUEUE_TYPE_DISPATCH        251
 
+#define ALIGN_DOWN(size, align)  ((size) & ~((align) - 1))
+
 #ifndef __ASSEMBLER__
 
 extern int _reserve_w1_dram_start, _reserve_w1_dram_end;

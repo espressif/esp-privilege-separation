@@ -55,17 +55,25 @@ index 296427721a..fae596b796 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/esp32c3/ld/esp32c3.project.ld.in b/components/esp32c3/ld/esp32c3.project.ld.in
-index 21d5845b36..9f9510fe29 100644
+index 21d5845b36..94f513e6e9 100644
 --- a/components/esp32c3/ld/esp32c3.project.ld.in
 +++ b/components/esp32c3/ld/esp32c3.project.ld.in
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,14 @@
 +#include "sdkconfig.h"
-+#define ROM_DRAM_RESERVE_START          0x3FCDF060
++
++/*
++ * DRAM region from 0x3FCDF060 is reserved for ROM functions
++ * and user app should not be able to access it. A split line
++ * is added to protect reserved ROM region. As the split line
++ * can only be added at 256 byte aligned address, alignment
++ * correction is used here.
++ */
++#define ROM_DRAM_RESERVE_START          ((0x3FCDF060) & ~((256) - 1))
 +
  /* Default entry point */
  ENTRY(call_start_cpu0);
  
-@@ -132,6 +135,13 @@ SECTIONS
+@@ -132,6 +143,13 @@ SECTIONS
    .iram0.text :
    {
      _iram_start = ABSOLUTE(.);
@@ -79,7 +87,7 @@ index 21d5845b36..9f9510fe29 100644
      /* Vectors go to start of IRAM */
      ASSERT(ABSOLUTE(.) % 0x100 == 0, "vector address must be 256 byte aligned");
      KEEP(*(.exception_vectors.text));
-@@ -248,6 +258,27 @@ SECTIONS
+@@ -248,6 +266,27 @@ SECTIONS
      _bss_end = ABSOLUTE(.);
    } > dram0_0_seg
  

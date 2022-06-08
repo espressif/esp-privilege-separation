@@ -18,20 +18,27 @@ index 5d1b9ce8d1..b40c491651 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/esp_system/ld/esp32c3/sections.ld.in b/components/esp_system/ld/esp32c3/sections.ld.in
-index e6fe6307a4..59fef542bc 100644
+index e6fe6307a4..0a5ee30c4d 100644
 --- a/components/esp_system/ld/esp32c3/sections.ld.in
 +++ b/components/esp_system/ld/esp32c3/sections.ld.in
-@@ -4,6 +4,9 @@
+@@ -4,6 +4,16 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
 +#include "sdkconfig.h"
-+#define ROM_DRAM_RESERVE_START          0x3FCDF060
++
++/* DRAM region from 0x3FCDF060 is reserved for ROM functions
++ * and user app should not be able to access it. A split line
++ * is added to protect reserved ROM region. As the split line
++ * can only be added at 256 byte aligned address, alignment
++ * correction is used here.
++ */
++#define ROM_DRAM_RESERVE_START          ((0x3FCDF060) & ~((256) - 1))
 +
  /* Default entry point */
  ENTRY(call_start_cpu0);
  
-@@ -122,6 +125,13 @@ SECTIONS
+@@ -122,6 +132,13 @@ SECTIONS
    .iram0.text :
    {
      _iram_start = ABSOLUTE(.);
@@ -45,7 +52,7 @@ index e6fe6307a4..59fef542bc 100644
      /* Vectors go to start of IRAM */
      ASSERT(ABSOLUTE(.) % 0x100 == 0, "vector address must be 256 byte aligned");
      KEEP(*(.exception_vectors.text));
-@@ -208,6 +218,27 @@ SECTIONS
+@@ -208,6 +225,27 @@ SECTIONS
      _bss_end = ABSOLUTE(.);
    } > dram0_0_seg
  
