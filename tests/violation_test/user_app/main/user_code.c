@@ -29,9 +29,14 @@
 
 #include "esp_timer.h"
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/rom_layout.h"
+#endif
+
 #define BLINK_GPIO      GPIO_NUM_4
 
 extern uint32_t _user_data_start;
+extern uint32_t _user_text_start;
 extern uint32_t _user_text_end;
 extern uint32_t _user_xip_text_start;
 
@@ -55,6 +60,19 @@ void dram_violation_task()
 
     *forbidden_dram = 0x41414141;
 
+    while(1) {
+        ;
+    }
+}
+
+void rom_reserve_violation_task()
+{
+    printf("Writing to reserve ROM DRAM region");
+    const ets_rom_layout_t *layout = ets_rom_layout_p;
+    *(uint32_t *)layout->dram0_rtos_reserved_start = 0x41414141;
+
+    // Unreachable code as the task will be deleted after
+    // accessing reserved DRAM region.
     while(1) {
         ;
     }
@@ -86,6 +104,32 @@ void flash_icache_violation_task()
 
     forbidden_flash_cache();
 
+    while(1) {
+        ;
+    }
+}
+
+void sram_icache_violation_task()
+{
+    uint32_t *start = (uint32_t)(&_user_text_start) - 0x100;
+
+    *start = 0x41414141;
+
+    // Unreachable code as the task will be deleted after
+    // accessing SRAM icache region.
+    while(1) {
+        ;
+    }
+}
+
+void sram_icache_execute_violation_task()
+{
+    void (*forbidden_icache)(void) = (void(*)(void))(&_user_text_start) - 0x100;
+
+    forbidden_icache();
+
+    // Unreachable code as the task will be deleted after
+    // accessing SRAM icache region.
     while(1) {
         ;
     }
@@ -272,6 +316,10 @@ void user_main()
         printf("Task Creation failed\n");
     }
 
+    if (xTaskCreate(rom_reserve_violation_task, "rom_reserve_task", 2048, NULL, 5, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
     if (xTaskCreate(rtc_violation_task, "rtc_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
@@ -281,6 +329,14 @@ void user_main()
     }
 
     if (xTaskCreate(flash_icache_violation_task, "flash_task", 2048, NULL, 5, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(sram_icache_violation_task, "icache_access_task", 2048, NULL, 5, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(sram_icache_execute_violation_task, "icache_execute_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
     vTaskDelay(pdMS_TO_TICKS(200));

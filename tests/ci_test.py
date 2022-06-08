@@ -58,7 +58,7 @@ def esppoolResetDevice(deviceId):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(devDict[deviceId]['ip'], 22, devDict[deviceId]['username'], devDict[deviceId]['password'], timeout=60)
-    prefix_cmd = "timeout 60s SerialCmd --port %s --timeout 10" % devDict[deviceId]['port']
+    prefix_cmd = "timeout 60s SerialCmd --port %s --timeout 30" % devDict[deviceId]['port']
     stdin, stdout, stderr = ssh.exec_command('%s connect' % prefix_cmd)
     time.sleep(1)
     stdin, stdout, stderr = ssh.exec_command('%s reset' % prefix_cmd)
@@ -117,11 +117,13 @@ if __name__ == '__main__':
     print(output)
 
     expected_output = [
-            'Illegal IRAM access:',
-            'Illegal DRAM access:',
+            'Illegal IRAM access: Fault addr: 0x4038',
+            'Illegal DRAM access: Fault addr: 0x3fcd',
             'Illegal RTC access:',
             'Illegal Peripheral access:',
             'Illegal Flash Icache access:',
+            'Illegal DRAM access: Fault addr: 0x3fcd',
+            'Illegal IRAM access: Fault addr: 0x4037',
             'Failed to take semaphore with handle = 0x1',
             'Failed to give semaphore with handle = 0x1',
             'Failed to give semaphore with handle = handle + 4',
