@@ -84,7 +84,12 @@ static bool _is_heap_initialized;
  * Block 9 is defined as DRAM used for startup stack in IDF but in case of user app,
  * we use pre-reserved memory as startup stack
  */
-#define ROM_DRAM_RESERVE_START          0x3FCDF060
+
+/* A split line is added at ROM_DRAM_RESERVE_START to protect
+ * reserved ROM region. As split line can only be added at 256
+ * byte aligned address, we have used ALIGN_DOWN macro here.
+ */
+#define ROM_DRAM_RESERVE_START          ALIGN_DOWN(0x3FCDF060, 256)
 
 const ets_rom_layout_t layout =  {.dram0_rtos_reserved_start = (void *)ROM_DRAM_RESERVE_START};
 

@@ -39,6 +39,7 @@
 #include "esp_memprot.h"
 #endif
 #include "esp32c3/rom/cache.h"
+#include "esp32c3/rom/rom_layout.h"
 #include "esp_heap_caps_init.h"
 
 static const char *TAG = "esp_priv_access";
@@ -179,7 +180,12 @@ static void esp_priv_access_dram_config()
 {
     permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_dram_start);
 
-    permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_1, (intptr_t)&_reserve_w1_dram_start);
+    /* Split line to protect DRAM area reserved for ROM functions.
+     * ALIGN_DOWN macro is used to align the address to 256 bit boundary */
+    const ets_rom_layout_t *layout = ets_rom_layout_p;
+    intptr_t rom_reserve_aligned = ALIGN_DOWN((int)layout->dram0_rtos_reserved_start, 256);
+    permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_1, rom_reserve_aligned);
+
 
     permc_ll_dram_set_perm(PERMC_AREA_1, PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_dram_set_perm(PERMC_AREA_2, PERMC_WORLD_0, PERMC_ACCESS_ALL);
@@ -187,7 +193,7 @@ static void esp_priv_access_dram_config()
 
     permc_ll_dram_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
     permc_ll_dram_set_perm(PERMC_AREA_2, PERMC_WORLD_1, PERMC_ACCESS_ALL);
-    permc_ll_dram_set_perm(PERMC_AREA_3, PERMC_WORLD_1, PERMC_ACCESS_ALL);
+    permc_ll_dram_set_perm(PERMC_AREA_3, PERMC_WORLD_1, PERMC_ACCESS_NONE);
 
     /* PMS_0 corresponds to region before the main split line, i.e entire IRAM */
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_0, PERMC_ACCESS_NONE);
