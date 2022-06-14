@@ -167,26 +167,27 @@
 1036  common  gpio_install_isr_service                sys_gpio_install_isr_service
 1037  custom  gpio_softisr_handler_add                sys_gpio_softisr_handler_add
 1038  custom  gpio_softisr_handler_remove             sys_gpio_softisr_handler_remove
+1039  common  gpio_set_level                          sys_gpio_set_level
 
-1039  common  esp_random                              sys_esp_random
-1040  common  esp_fill_random                         sys_esp_fill_random
+1040  common  esp_random                              sys_esp_random
+1041  common  esp_fill_random                         sys_esp_fill_random
 
 # ESP-Timer
-1041  common  esp_timer_create                        sys_esp_timer_create
-1042  common  esp_timer_start_once                    sys_esp_timer_start_once
-1043  common  esp_timer_start_periodic                sys_esp_timer_start_periodic
-1044  common  esp_timer_stop                          sys_esp_timer_stop
-1045  common  esp_timer_delete                        sys_esp_timer_delete
-1046  common  esp_timer_get_time                      sys_esp_timer_get_time
-1047  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
-1048  common  esp_timer_is_active                     sys_esp_timer_is_active
-1049  common  esp_system_get_time                     sys_esp_system_get_time
+1042  common  esp_timer_create                        sys_esp_timer_create
+1043  common  esp_timer_start_once                    sys_esp_timer_start_once
+1044  common  esp_timer_start_periodic                sys_esp_timer_start_periodic
+1045  common  esp_timer_stop                          sys_esp_timer_stop
+1046  common  esp_timer_delete                        sys_esp_timer_delete
+1047  common  esp_timer_get_time                      sys_esp_timer_get_time
+1048  common  esp_timer_get_next_alarm                sys_esp_timer_get_next_alarm
+1049  common  esp_timer_is_active                     sys_esp_timer_is_active
+1050  common  esp_system_get_time                     sys_esp_system_get_time
 
 # UART
-1050  common  uart_driver_install                     sys_uart_driver_install
-1051  common  uart_driver_delete                      sys_uart_driver_delete
-1052  common  uart_write_bytes                        sys_uart_write_bytes
-1053  common  uart_read_bytes                         sys_uart_read_bytes
+1051  common  uart_driver_install                     sys_uart_driver_install
+1052  common  uart_driver_delete                      sys_uart_driver_delete
+1053  common  uart_write_bytes                        sys_uart_write_bytes
+1054  common  uart_read_bytes                         sys_uart_read_bytes
 
 
-1054  custom  esp_get_protected_heap_stats            sys_esp_get_protected_heap_stats
+1055  custom  esp_get_protected_heap_stats            sys_esp_get_protected_heap_stats
