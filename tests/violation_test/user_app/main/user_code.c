@@ -40,7 +40,44 @@ extern uint32_t _user_text_start;
 extern uint32_t _user_text_end;
 extern uint32_t _user_xip_text_start;
 
-void iram_violation_task()
+void irom_violation_task()
+{
+    void (*rom_printf)(const char *fmt, ...) = (void(*)(const char *fmt, ...))0x40000040;
+
+    rom_printf("Should not print\n");
+
+    while(1) {
+        ;
+    }
+}
+
+void sram_icache_write_violation_task()
+{
+    uint32_t *start = (uint32_t *)((uint32_t)(&_user_text_start) - 0x100);
+
+    *start = 0x41414141;
+
+    // Unreachable code as the task will be deleted after
+    // accessing SRAM icache region.
+    while(1) {
+        ;
+    }
+}
+
+void sram_icache_execute_violation_task()
+{
+    void (*forbidden_icache)(void) = (void(*)(void))(&_user_text_start) - 0x100;
+
+    forbidden_icache();
+
+    // Unreachable code as the task will be deleted after
+    // accessing SRAM icache region.
+    while(1) {
+        ;
+    }
+}
+
+void iram_execute_violation_task()
 {
     uint32_t end = (uint32_t)&_user_text_end;
 
@@ -53,9 +90,49 @@ void iram_violation_task()
     }
 }
 
-void dram_violation_task()
+void iram_write_violation_task()
 {
-    printf("Writing to forbidden region\n");
+    uint32_t end = (uint32_t)&_user_text_end;
+
+    uint32_t *forbidden_iram = (uint32_t *)(end + 0x1000);
+
+    *forbidden_iram = 0x41414141;
+
+    while(1) {
+        ;
+    }
+}
+
+void iram_read_violation_task()
+{
+    uint32_t end = (uint32_t)&_user_text_end;
+
+    uint32_t *forbidden_iram = (uint32_t *)(end + 0x1000);
+
+    printf("Value : 0x%x\n", *forbidden_iram);
+
+    while(1) {
+        ;
+    }
+}
+
+void drom_violation_task()
+{
+    printf("Reading from forbidden DROM region\n");
+
+    uint32_t *forbidden_drom = (uint32_t *)0x3FF10000;
+
+    printf("Value : 0x%x\n", *forbidden_drom);
+
+    while(1) {
+        ;
+    }
+}
+
+void dram_write_violation_task()
+{
+    printf("Writing to forbidden DRAM region\n");
+
     uint32_t *forbidden_dram = (&_user_data_start) - 0x10000;
 
     *forbidden_dram = 0x41414141;
@@ -65,11 +142,40 @@ void dram_violation_task()
     }
 }
 
-void rom_reserve_violation_task()
+void dram_read_violation_task()
+{
+    printf("Reading from forbidden DRAM region\n");
+
+    uint32_t *forbidden_dram = (&_user_data_start) - 0x10000;
+
+    printf("Value : 0x%x\n", *forbidden_dram);
+
+    while(1) {
+        ;
+    }
+}
+
+void rom_reserve_write_violation_task()
 {
     printf("Writing to reserve ROM DRAM region");
+
     const ets_rom_layout_t *layout = ets_rom_layout_p;
     *(uint32_t *)layout->dram0_rtos_reserved_start = 0x41414141;
+
+    // Unreachable code as the task will be deleted after
+    // accessing reserved DRAM region.
+    while(1) {
+        ;
+    }
+}
+
+void rom_reserve_read_violation_task()
+{
+    printf("Reading from reserve ROM DRAM region");
+
+    const ets_rom_layout_t *layout = ets_rom_layout_p;
+
+    printf("Value : 0x%x\n", *(uint32_t *)layout->dram0_rtos_reserved_start);
 
     // Unreachable code as the task will be deleted after
     // accessing reserved DRAM region.
@@ -109,27 +215,12 @@ void flash_icache_violation_task()
     }
 }
 
-void sram_icache_violation_task()
+void flash_dcache_violation_task()
 {
-    uint32_t *start = (uint32_t)(&_user_text_start) - 0x100;
+    char *forbidden_str = (char *)0x3C080130;
 
-    *start = 0x41414141;
+    printf("Reading from forbidden Dcache region : %s\n", forbidden_str);
 
-    // Unreachable code as the task will be deleted after
-    // accessing SRAM icache region.
-    while(1) {
-        ;
-    }
-}
-
-void sram_icache_execute_violation_task()
-{
-    void (*forbidden_icache)(void) = (void(*)(void))(&_user_text_start) - 0x100;
-
-    forbidden_icache();
-
-    // Unreachable code as the task will be deleted after
-    // accessing SRAM icache region.
     while(1) {
         ;
     }
@@ -308,15 +399,47 @@ void user_main()
 {
     printf("Testing violations\n");
 
-    if (xTaskCreate(iram_violation_task, "iram_task", 2048, NULL, 5, NULL) != pdPASS) {
+    if (xTaskCreate(irom_violation_task, "irom_task", 2048, NULL, 15, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
 
-    if (xTaskCreate(dram_violation_task, "dram_task", 2048, NULL, 5, NULL) != pdPASS) {
+    if (xTaskCreate(sram_icache_write_violation_task, "icache_access_task", 2048, NULL, 14, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
 
-    if (xTaskCreate(rom_reserve_violation_task, "rom_reserve_task", 2048, NULL, 5, NULL) != pdPASS) {
+    if (xTaskCreate(sram_icache_execute_violation_task, "icache_execute_task", 2048, NULL, 13, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(iram_execute_violation_task, "iram_execute_task", 2048, NULL, 12, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(iram_write_violation_task, "iram_write_task", 2048, NULL, 11, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(iram_read_violation_task, "iram_read_task", 2048, NULL, 10, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(drom_violation_task, "drom_task", 2048, NULL, 9, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(dram_write_violation_task, "dram_write_task", 2048, NULL, 8, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(dram_read_violation_task, "dram_read_task", 2048, NULL, 7, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(rom_reserve_write_violation_task, "rom_reserve_write_task", 2048, NULL, 6, NULL) != pdPASS) {
+        printf("Task Creation failed\n");
+    }
+
+    if (xTaskCreate(rom_reserve_read_violation_task, "rom_reserve_read_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
 
@@ -328,30 +451,34 @@ void user_main()
         printf("Task Creation failed\n");
     }
 
-    if (xTaskCreate(flash_icache_violation_task, "flash_task", 2048, NULL, 5, NULL) != pdPASS) {
+    if (xTaskCreate(flash_icache_violation_task, "flash_icache_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
 
-    if (xTaskCreate(sram_icache_violation_task, "icache_access_task", 2048, NULL, 5, NULL) != pdPASS) {
+    if (xTaskCreate(flash_dcache_violation_task, "flash_dcache_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
 
-    if (xTaskCreate(sram_icache_execute_violation_task, "icache_execute_task", 2048, NULL, 5, NULL) != pdPASS) {
-        printf("Task Creation failed\n");
-    }
     vTaskDelay(pdMS_TO_TICKS(200));
+
     if (xTaskCreate(semaphore_handle_manipulation_task, "semaphore_handle_manipulation_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
+
     vTaskDelay(pdMS_TO_TICKS(200));
+
     if (xTaskCreate(task_handle_manipulation_task, "task_handle_manipulation_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
+
     vTaskDelay(pdMS_TO_TICKS(200));
+
     if (xTaskCreate(esp_timer_handle_manipulation_task, "esp_timer_handle_manipulation_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
+
     vTaskDelay(pdMS_TO_TICKS(500));
+
     if (xTaskCreate(xtimer_handle_manipulation_task, "xtimer_handle_manipulation_task", 2048, NULL, 5, NULL) != pdPASS) {
         printf("Task Creation failed\n");
     }
