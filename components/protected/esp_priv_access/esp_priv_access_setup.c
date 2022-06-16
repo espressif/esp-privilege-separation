@@ -87,6 +87,7 @@ static void esp_priv_access_dram_int_en(uint8_t int_num)
 static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
 {
     permc_ll_flash_icache_enable_int();
+    permc_ll_flash_dcache_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_flash_cache_get_int_source_num(), int_num);
 }
@@ -215,11 +216,12 @@ static void esp_priv_access_rtc_config()
 }
 
 /* Configure Flash cache permissions */
-static IRAM_ATTR void esp_priv_access_flash_cache_config()
+static IRAM_ATTR void esp_priv_access_flash_icache_config()
 {
     /* Invalidate Cache */
     Cache_Invalidate_ICache_All();
 
+    /* Configure Icache */
     permc_ll_flash_icache_set_split_line(PERMC_SPLIT_LINE_0, 0x42000000);
     permc_ll_flash_icache_set_split_line(PERMC_SPLIT_LINE_1, 0x42400000);
     permc_ll_flash_icache_set_split_line(PERMC_SPLIT_LINE_2, 0x42800000);
@@ -230,6 +232,23 @@ static IRAM_ATTR void esp_priv_access_flash_cache_config()
 
     permc_ll_flash_icache_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
     permc_ll_flash_icache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
+
+}
+
+static IRAM_ATTR void esp_priv_access_flash_dcache_config()
+{
+    /* Configure Dcache */
+    permc_ll_flash_dcache_set_split_line(PERMC_SPLIT_LINE_0, 0x3C000000);
+    permc_ll_flash_dcache_set_split_line(PERMC_SPLIT_LINE_1, 0x3C400000);
+    permc_ll_flash_dcache_set_split_line(PERMC_SPLIT_LINE_2, 0x3C800000);
+
+    permc_ll_flash_dcache_set_perm(PERMC_AREA_0, PERMC_WORLD_0, PERMC_ACCESS_ALL);
+    /* WORLD0 requires access to WORLD1 to load the cache when returning to WORLD1 from WORLD0 */
+    permc_ll_flash_dcache_set_perm(PERMC_AREA_1, PERMC_WORLD_0, PERMC_ACCESS_ALL);
+
+    permc_ll_flash_dcache_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+    permc_ll_flash_dcache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
+
 }
 
 /* Revoke access to all the peripherals for WORLD1 */
@@ -313,7 +332,9 @@ esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
 
     esp_priv_access_rtc_config();
 
-    esp_priv_access_flash_cache_config();
+    esp_priv_access_flash_icache_config();
+
+    esp_priv_access_flash_dcache_config();
 
     esp_priv_access_revoke_world1_peripheral_permissions();
 
@@ -419,6 +440,8 @@ IRAM_ATTR char *esp_priv_access_int_type_to_str(esp_priv_access_int_t int_type)
             return "DRAM";
         case PA_FLASH_ICACHE_INT:
             return "Flash Icache";
+        case PA_FLASH_DCACHE_INT:
+            return "Flash Dcache";
         case PA_RTC_INT:
             return "RTC";
         case PA_PERIPH_INT:
@@ -439,6 +462,9 @@ IRAM_ATTR void esp_priv_access_enable_int(esp_priv_access_int_t int_type)
             break;
         case PA_FLASH_ICACHE_INT:
             permc_ll_flash_icache_enable_int();
+            break;
+        case PA_FLASH_DCACHE_INT:
+            permc_ll_flash_dcache_enable_int();
             break;
         case PA_RTC_INT:
         case PA_PERIPH_INT:
@@ -465,6 +491,10 @@ IRAM_ATTR void esp_priv_access_clear_and_reenable_int(esp_priv_access_int_t int_
             permc_ll_flash_icache_clear_int();
             permc_ll_flash_icache_enable_int();
             break;
+        case PA_FLASH_DCACHE_INT:
+            permc_ll_flash_dcache_clear_int();
+            permc_ll_flash_dcache_enable_int();
+            break;
         case PA_RTC_INT:
         case PA_PERIPH_INT:
             permc_ll_pif_clear_int();
@@ -486,6 +516,8 @@ IRAM_ATTR esp_priv_access_int_t esp_priv_access_get_int_status()
         int_status = PA_DRAM_INT;
     } else if (permc_ll_flash_icache_get_int_status()) {
         int_status = PA_FLASH_ICACHE_INT;
+    } else if  (permc_ll_flash_dcache_get_int_status()) {
+        int_status = PA_FLASH_DCACHE_INT;
     } else if (permc_ll_pif_get_int_status()) {
         uint32_t addr = permc_ll_pif_get_fault_addr();
         if (addr >= SOC_RTC_IRAM_LOW && addr < SOC_RTC_IRAM_HIGH) {
@@ -507,6 +539,8 @@ IRAM_ATTR uint32_t esp_priv_access_get_fault_addr(esp_priv_access_int_t int_type
             return permc_ll_dram_get_fault_addr();
         case PA_FLASH_ICACHE_INT:
             return permc_ll_flash_icache_get_fault_addr();
+        case PA_FLASH_DCACHE_INT:
+            return permc_ll_flash_dcache_get_fault_addr();
         case PA_RTC_INT:
         case PA_PERIPH_INT:
             return permc_ll_pif_get_fault_addr();

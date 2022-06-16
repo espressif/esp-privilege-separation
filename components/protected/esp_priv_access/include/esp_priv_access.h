@@ -31,6 +31,7 @@ typedef enum {
     PA_DRAM_INT,
     PA_RTC_INT,
     PA_FLASH_ICACHE_INT,
+    PA_FLASH_DCACHE_INT,
     PA_PERIPH_INT,
 } esp_priv_access_int_t;
 
