@@ -33,10 +33,16 @@ The entire firmware comprises of 2 different executables:
 
 To get started, please try out the [examples](examples). Each example has README with all setup instructions.
 
-#### Supported SoCs
+### Supported SoCs
 - ESP32-C3 based development board
 
-### Future Work
+## Documentation
 
-The ESP Privilege Separation project is under active development. There are a wide range of problems that are unsolved yet, and are quite interesting to explore. We will be addressing these in the days to come. With this release, our goal is to enable a minimal set of functionality that can achieve the user-kernel privilege separation with minimal memory bloat for user applications, at the same time, maintaining simplicity and backward compatibility for the IDF APIs. If you have a specific requirement that you believe fits well in this framework, or if solving such problems excites you, we'd love to talk to you for collaboration.
+Please refer to the documentation for latest version at: https://docs.espressif.com/projects/esp-privilege-separation/en/latest/esp32c3/index.html. This documentation is built from the [docs directory](docs) of this repository.
+
+## Future Work
+
+The ESP Privilege Separation framework is under active development. There are a wide range of problems that are unsolved yet, and are quite interesting to explore. We will be addressing these in the days to come. With this release, our goal is to enable a minimal set of functionality that can achieve the user-kernel privilege separation with minimal memory bloat for user applications, at the same time, maintaining simplicity and backward compatibility for the ESP-IDF APIs.
+
+If you have a specific requirement that you believe fits well in this framework, or if solving such problems excites you, we'd love to talk to you for collaboration.
 
