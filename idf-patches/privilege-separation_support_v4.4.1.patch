@@ -369,10 +369,26 @@ index 1006d5bea5..c583e1d824 100644
  
 diff --git a/components/soc/esp32c3/include/soc/world_controller_reg.h b/components/soc/esp32c3/include/soc/world_controller_reg.h
 new file mode 100644
-index 0000000000..f4a6fe3724
+index 0000000000..57eeb1e2bd
 --- /dev/null
 +++ b/components/soc/esp32c3/include/soc/world_controller_reg.h
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,66 @@
++// Copyright 2022 Espressif Systems (Shanghai) PTE LTD
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#pragma once
++
 +#define WORLD_CONTROL_BASE                                      0x600D0000
 +#define WORLD_CONTROL_CORE_X_BASE(i)                            ((WORLD_CONTROL_BASE) + 0x400*(i))
 +
@@ -399,30 +415,30 @@ index 0000000000..f4a6fe3724
 +#define WORLD_CONTROL_CORE_X_NMI_MASK(i)                        (WORLD_CONTROL_CORE_X_BASE(i) + 0x190)
 +#define WORLD_CONTROL_CORE_X_NMI_MASK_PHASE(i)                  (WORLD_CONTROL_CORE_X_BASE(i) + 0x194)
 +
-+#define World_Controller_DMA_APBPERI_SPI2                       (CPU_PERI_WORLD_CONTROLLER + 0x800)
-+#define World_Controller_DMA_APBPERI_SPI3                       (CPU_PERI_WORLD_CONTROLLER + 0x804)
-+#define World_Controller_DMA_APBPERI_UCHI0                      (CPU_PERI_WORLD_CONTROLLER + 0x808)
-+#define World_Controller_DMA_APBPERI_I2S0                       (CPU_PERI_WORLD_CONTROLLER + 0x80C)
-+#define World_Controller_DMA_APBPERI_I2S1                       (CPU_PERI_WORLD_CONTROLLER + 0x810)
-+#define World_Controller_DMA_APBPERI_LCD_CAM                    (CPU_PERI_WORLD_CONTROLLER + 0x814)
-+#define World_Controller_DMA_APBPERI_AES                        (CPU_PERI_WORLD_CONTROLLER + 0x818)
-+#define World_Controller_DMA_APBPERI_SHA                        (CPU_PERI_WORLD_CONTROLLER + 0x81C)
-+#define World_Controller_DMA_APBPERI_ADC_DAC                    (CPU_PERI_WORLD_CONTROLLER + 0x820)
-+#define World_Controller_DMA_APBPERI_USB                        (CPU_PERI_WORLD_CONTROLLER + 0x824)
-+#define World_Controller_DMA_APBPERI_SDIO_HOST                  (CPU_PERI_WORLD_CONTROLLER + 0x828)
-+#define World_Controller_DMA_APBPERI_MAC                        (CPU_PERI_WORLD_CONTROLLER + 0x82C)
-+#define World_Controller_DMA_APBPERI_BACKUP                     (CPU_PERI_WORLD_CONTROLLER + 0x830)
-+#define World_Controller_DMA_APBPERI_SLC                        (CPU_PERI_WORLD_CONTROLLER + 0x834)
-+#define World_Controller_DMA_APBPERI_LC                         (CPU_PERI_WORLD_CONTROLLER + 0x838)
-+#define World_Controller_EDMA_SPI2                              (CPU_PERI_WORLD_CONTROLLER + 0x900)
-+#define World_Controller_EDMA_SPI3                              (CPU_PERI_WORLD_CONTROLLER + 0x904)
-+#define World_Controller_EDMA_UCHI0                             (CPU_PERI_WORLD_CONTROLLER + 0x908)
-+#define World_Controller_EDMA_I2S0                              (CPU_PERI_WORLD_CONTROLLER + 0x90C)
-+#define World_Controller_EDMA_I2S1                              (CPU_PERI_WORLD_CONTROLLER + 0x910)
-+#define World_Controller_EDMA_LCD_CAM                           (CPU_PERI_WORLD_CONTROLLER + 0x914)
-+#define World_Controller_EDMA_AES                               (CPU_PERI_WORLD_CONTROLLER + 0x918)
-+#define World_Controller_EDMA_SHA                               (CPU_PERI_WORLD_CONTROLLER + 0x91C)
-+#define World_Controller_EDMA_ADC_DAC                           (CPU_PERI_WORLD_CONTROLLER + 0x920)
++#define WORLD_CONTROLLER_DMA_APBPERI_SPI2                       (WORLD_CONTROL_BASE + 0x800)
++#define WORLD_CONTROLLER_DMA_APBPERI_SPI3                       (WORLD_CONTROL_BASE + 0x804)
++#define WORLD_CONTROLLER_DMA_APBPERI_UCHI0                      (WORLD_CONTROL_BASE + 0x808)
++#define WORLD_CONTROLLER_DMA_APBPERI_I2S0                       (WORLD_CONTROL_BASE + 0x80C)
++#define WORLD_CONTROLLER_DMA_APBPERI_I2S1                       (WORLD_CONTROL_BASE + 0x810)
++#define WORLD_CONTROLLER_DMA_APBPERI_LCD_CAM                    (WORLD_CONTROL_BASE + 0x814)
++#define WORLD_CONTROLLER_DMA_APBPERI_AES                        (WORLD_CONTROL_BASE + 0x818)
++#define WORLD_CONTROLLER_DMA_APBPERI_SHA                        (WORLD_CONTROL_BASE + 0x81C)
++#define WORLD_CONTROLLER_DMA_APBPERI_ADC_DAC                    (WORLD_CONTROL_BASE + 0x820)
++#define WORLD_CONTROLLER_DMA_APBPERI_USB                        (WORLD_CONTROL_BASE + 0x824)
++#define WORLD_CONTROLLER_DMA_APBPERI_SDIO_HOST                  (WORLD_CONTROL_BASE + 0x828)
++#define WORLD_CONTROLLER_DMA_APBPERI_MAC                        (WORLD_CONTROL_BASE + 0x82C)
++#define WORLD_CONTROLLER_DMA_APBPERI_BACKUP                     (WORLD_CONTROL_BASE + 0x830)
++#define WORLD_CONTROLLER_DMA_APBPERI_SLC                        (WORLD_CONTROL_BASE + 0x834)
++#define WORLD_CONTROLLER_DMA_APBPERI_LC                         (WORLD_CONTROL_BASE + 0x838)
++#define WORLD_CONTROLLER_EDMA_SPI2                              (WORLD_CONTROL_BASE + 0x900)
++#define WORLD_CONTROLLER_EDMA_SPI3                              (WORLD_CONTROL_BASE + 0x904)
++#define WORLD_CONTROLLER_EDMA_UCHI0                             (WORLD_CONTROL_BASE + 0x908)
++#define WORLD_CONTROLLER_EDMA_I2S0                              (WORLD_CONTROL_BASE + 0x90C)
++#define WORLD_CONTROLLER_EDMA_I2S1                              (WORLD_CONTROL_BASE + 0x910)
++#define WORLD_CONTROLLER_EDMA_LCD_CAM                           (WORLD_CONTROL_BASE + 0x914)
++#define WORLD_CONTROLLER_EDMA_AES                               (WORLD_CONTROL_BASE + 0x918)
++#define WORLD_CONTROLLER_EDMA_SHA                               (WORLD_CONTROL_BASE + 0x91C)
++#define WORLD_CONTROLLER_EDMA_ADC_DAC                           (WORLD_CONTROL_BASE + 0x920)
 diff --git a/tools/idf_monitor_base/gdbhelper.py b/tools/idf_monitor_base/gdbhelper.py
 index f32d4fb688..55d7dda1fc 100644
 --- a/tools/idf_monitor_base/gdbhelper.py
