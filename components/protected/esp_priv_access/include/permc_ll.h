@@ -560,7 +560,7 @@ static inline void permc_ll_flash_dcache_set_perm(permc_sram_area_t area, permc_
         }
         case PERMC_AREA_1: {
             uint32_t reg_val = REG_GET_FIELD(EXTMEM_DBUS_PMS_TBL_ATTR_REG, EXTMEM_DBUS_PMS_SCT2_ATTR);
-            REG_SET_FIELD(EXTMEM_DBUS_PMS_TBL_ATTR_REG, EXTMEM_DBUS_PMS_SCT1_ATTR, (reg_val & mask) | val);
+            REG_SET_FIELD(EXTMEM_DBUS_PMS_TBL_ATTR_REG, EXTMEM_DBUS_PMS_SCT2_ATTR, (reg_val & mask) | val);
             break;
         }
         default:
@@ -570,7 +570,38 @@ static inline void permc_ll_flash_dcache_set_perm(permc_sram_area_t area, permc_
 
 static inline void permc_ll_flash_dcache_enable_int()
 {
+	REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_CLR_REG, EXTMEM_CORE0_DBUS_REJECT_INT_CLR, 0);
 	REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ENA_REG, EXTMEM_CORE0_DBUS_REJECT_INT_ENA, 1);
+}
+
+static inline void permc_ll_flash_dcache_clear_int()
+{
+    REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_CLR_REG, EXTMEM_CORE0_DBUS_REJECT_INT_CLR, 1);
+}
+
+static inline void permc_ll_flash_dcache_disable_int()
+{
+    REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ENA_REG, EXTMEM_CORE0_DBUS_REJECT_INT_ENA, 0);
+}
+
+static inline uint32_t permc_ll_flash_dcache_get_int_status()
+{
+    return REG_GET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ST_REG, EXTMEM_CORE0_DBUS_REJECT_ST);
+}
+
+static inline uint32_t permc_ll_flash_dcache_get_fault_attribute()
+{
+    return REG_GET_FIELD(EXTMEM_CORE0_DBUS_REJECT_ST_REG, EXTMEM_CORE0_DBUS_ATTR);
+}
+
+static inline uint32_t permc_ll_flash_dcache_get_fault_world()
+{
+    return REG_GET_FIELD(EXTMEM_CORE0_DBUS_REJECT_ST_REG, EXTMEM_CORE0_DBUS_WORLD);
+}
+
+static inline uint32_t permc_ll_flash_dcache_get_fault_addr()
+{
+    return REG_READ(EXTMEM_CORE0_DBUS_REJECT_VADDR_REG);
 }
 
 /*

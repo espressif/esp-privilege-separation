@@ -58,7 +58,7 @@ def esppoolResetDevice(deviceId):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(devDict[deviceId]['ip'], 22, devDict[deviceId]['username'], devDict[deviceId]['password'], timeout=60)
-    prefix_cmd = "timeout 60s SerialCmd --port %s --timeout 30" % devDict[deviceId]['port']
+    prefix_cmd = "timeout 60s SerialCmd --port %s --timeout 60" % devDict[deviceId]['port']
     stdin, stdout, stderr = ssh.exec_command('%s connect' % prefix_cmd)
     time.sleep(1)
     stdin, stdout, stderr = ssh.exec_command('%s reset' % prefix_cmd)
@@ -117,13 +117,31 @@ if __name__ == '__main__':
     print(output)
 
     expected_output = [
-            'Illegal IRAM access: Fault addr: 0x4038',
-            'Illegal DRAM access: Fault addr: 0x3fcd',
-            'Illegal RTC access:',
-            'Illegal Peripheral access:',
-            'Illegal Flash Icache access:',
-            'Illegal DRAM access: Fault addr: 0x3fcd',
+            'Illegal IRAM access: Fault addr: 0x4000',
+            'Deleting irom_task',
             'Illegal IRAM access: Fault addr: 0x4037',
+            'Deleting icache_access_t',
+            'Deleting icache_execute_',
+            'Illegal IRAM access: Fault addr: 0x4038',
+            'Deleting iram_execute_ta',
+            'Deleting iram_write_task',
+            'Deleting iram_read_task',
+            'Illegal DRAM access: Fault addr: 0x3ff1',
+            'Deleting drom_task',
+            'Illegal DRAM access: Fault addr: 0x3fc8',
+            'Deleting dram_write_task',
+            'Deleting dram_read_task',
+            'Illegal DRAM access: Fault addr: 0x3fcd',
+            'Deleting rom_reserve_wri',
+            'Deleting rom_reserve_rea',
+            'Illegal RTC access:',
+            'Deleting rtc_task',
+            'Illegal Peripheral access:',
+            'Deleting pif_task',
+            'Illegal Flash Icache access:',
+            'Deleting flash_icache_ta',
+            'Illegal Flash Dcache access',
+            'Deleting flash_dcache_ta',
             'Failed to take semaphore with handle = 0x1',
             'Failed to give semaphore with handle = 0x1',
             'Failed to give semaphore with handle = handle + 4',
