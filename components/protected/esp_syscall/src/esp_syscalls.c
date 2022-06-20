@@ -1725,6 +1725,11 @@ esp_err_t sys_gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
     return ret;
 }
 
+esp_err_t sys_gpio_set_level(gpio_num_t gpio_num, uint32_t level)
+{
+    return gpio_set_level(gpio_num, level);
+}
+
 esp_err_t sys_nvs_flash_init()
 {
     return nvs_flash_init();

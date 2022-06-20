@@ -800,6 +800,11 @@ esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle)
     return EXECUTE_SYSCALL(gpio_handle, __NR_gpio_softisr_handler_remove);
 }
 
+esp_err_t usr_gpio_set_level(gpio_num_t gpio_num, uint32_t level)
+{
+    return EXECUTE_SYSCALL(gpio_num, level, __NR_gpio_set_level);
+}
+
 esp_err_t usr_nvs_flash_init()
 {
     return EXECUTE_SYSCALL(__NR_nvs_flash_init);

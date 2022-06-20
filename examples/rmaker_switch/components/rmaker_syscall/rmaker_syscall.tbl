@@ -1,0 +1,34 @@
+
+# ESP-Rainmaker
+1281  common  esp_rmaker_node_init                    sys_esp_rmaker_node_init
+1282  common  esp_rmaker_device_create                sys_esp_rmaker_device_create
+1283  common  esp_rmaker_device_add_cb                sys_esp_rmaker_device_add_cb
+1284  common  esp_rmaker_device_add_param             sys_esp_rmaker_device_add_param
+1285  custom  esp_rmaker_device_get_name              sys_esp_rmaker_device_get_name
+1286  common  esp_rmaker_param_create                 sys_esp_rmaker_param_create
+1287  common  esp_rmaker_device_assign_primary_param  sys_esp_rmaker_device_assign_primary_param
+1288  common  esp_rmaker_node_add_device              sys_esp_rmaker_node_add_device
+1289  common  esp_rmaker_start                        sys_esp_rmaker_start
+1290  common  esp_rmaker_param_update_and_notify      sys_esp_rmaker_param_update_and_notify
+1291  common  esp_rmaker_param_update_and_report      sys_esp_rmaker_param_update_and_report
+1292  common  esp_rmaker_device_get_param_by_name     sys_esp_rmaker_device_get_param_by_name
+1293  common  esp_rmaker_device_get_param_by_type     sys_esp_rmaker_device_get_param_by_type
+1294  common  esp_rmaker_param_add_ui_type            sys_esp_rmaker_param_add_ui_type
+1295  common  esp_rmaker_param_add_bounds             sys_esp_rmaker_param_add_bounds
+1296  custom  esp_rmaker_param_get_name               sys_esp_rmaker_param_get_name
+
+# Rainmaker Utils
+1297  common  iot_button_create                       sys_iot_button_create
+1298  common  iot_button_set_evt_cb                   sys_iot_button_set_evt_cb
+
+# WS2812
+1299  common  ws2812_led_init                         sys_ws2812_led_init
+1300  common  ws2812_led_set_rgb                      sys_ws2812_led_set_rgb
+1301  common  ws2812_led_set_hsv                      sys_ws2812_led_set_hsv
+1302  common  ws2812_led_clear                        sys_ws2812_led_clear
+
+1303  common  app_wifi_start                          sys_app_wifi_start
+1304  common  app_reset_button_register               sys_app_reset_button_register
+
+# Rmaker initialisation custom syscall
+1305  custom  esp_rmaker_kernel_init                  sys_esp_rmaker_kernel_init
