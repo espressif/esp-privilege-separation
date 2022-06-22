@@ -36,10 +36,10 @@ index 393464f5ab..eeec4fd178 100644
  
      # disable stack protection in files which are involved in initialization of that feature
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
-index 296427721a..fae596b796 100644
+index 72e7bfa5c9..6c74fb98f1 100644
 --- a/components/esp32c3/Kconfig
 +++ b/components/esp32c3/Kconfig
-@@ -252,4 +252,14 @@ menu "ESP32C3-Specific"
+@@ -255,4 +255,14 @@ menu "ESP32C3-Specific"
              This option provides a software workaround for this issue. Configure to isolate all
              GPIO pins in sleep state.
  
@@ -55,7 +55,7 @@ index 296427721a..fae596b796 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/esp32c3/ld/esp32c3.project.ld.in b/components/esp32c3/ld/esp32c3.project.ld.in
-index 21d5845b36..94f513e6e9 100644
+index b36c4cbcb2..78d75dcda8 100644
 --- a/components/esp32c3/ld/esp32c3.project.ld.in
 +++ b/components/esp32c3/ld/esp32c3.project.ld.in
 @@ -1,3 +1,14 @@
@@ -73,7 +73,7 @@ index 21d5845b36..94f513e6e9 100644
  /* Default entry point */
  ENTRY(call_start_cpu0);
  
-@@ -132,6 +143,13 @@ SECTIONS
+@@ -126,6 +137,13 @@ SECTIONS
    .iram0.text :
    {
      _iram_start = ABSOLUTE(.);
@@ -87,7 +87,7 @@ index 21d5845b36..94f513e6e9 100644
      /* Vectors go to start of IRAM */
      ASSERT(ABSOLUTE(.) % 0x100 == 0, "vector address must be 256 byte aligned");
      KEEP(*(.exception_vectors.text));
-@@ -248,6 +266,27 @@ SECTIONS
+@@ -242,6 +260,27 @@ SECTIONS
      _bss_end = ABSOLUTE(.);
    } > dram0_0_seg
  
@@ -129,21 +129,23 @@ index f7e815beff..e50c0db74d 100644
          return true;
      }
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
-index 2e1c7c477f..7c5b87b418 100644
+index 89bf09e1e9..16bd55b690 100644
 --- a/components/riscv/vectors.S
 +++ b/components/riscv/vectors.S
 @@ -16,9 +16,26 @@
  #include "riscv/rvruntime-frames.h"
  #include "soc/soc_caps.h"
  #include "sdkconfig.h"
+-
+-
+-    .equ SAVE_REGS, 32
 +#include "soc/sensitive_reg.h"
 +#include "soc/world_controller_reg.h"
 +#include "soc/extmem_reg.h"
- 
++
 +#define W1_EXCEPTION_MAGIC  21
 +#define EXCCAUSE_ECALL  11
- 
--	.equ SAVE_REGS, 32
++
 +/*
 + * uxTCBNumber and uxTaskNumber members are added in TCB structure when
 + * FreeRTOS Trace facility is enabled. WORLD offset is changed by 8 bytes
@@ -156,12 +158,12 @@ index 2e1c7c477f..7c5b87b418 100644
 +#endif
 +
 +    /* Save CSRs when servicing interrupts */
-+	.equ SAVE_REGS, 40
- 	.equ CONTEXT_SIZE, (SAVE_REGS * 4)
- 	.equ panic_from_exception, xt_unhandled_exception
- 	.equ panic_from_isr, panicHandler
-@@ -61,6 +78,35 @@
- 	sw   t0, RV_STK_MEPC(sp)
++    .equ SAVE_REGS, 40
+     .equ CONTEXT_SIZE, (SAVE_REGS * 4)
+     .equ panic_from_exception, xt_unhandled_exception
+     .equ panic_from_isr, panicHandler
+@@ -65,6 +82,35 @@
+     sw   t0, RV_STK_MEPC(sp)
  .endm
  
 +.macro save_world
@@ -193,11 +195,11 @@ index 2e1c7c477f..7c5b87b418 100644
 +    fence
 +.endm
 +
- .macro restore_regs
- 	lw   ra,  RV_STK_RA(sp)
- 	lw   tp,  RV_STK_TP(sp)
-@@ -99,6 +145,29 @@
- 	csrw	mepc, t0
+ /* Restore the general purpose registers (excluding gp) from the context on
+  * the stack. The context is then deallocated. The default size is CONTEXT_SIZE
+  * but it can be overriden. */
+@@ -106,6 +152,29 @@
+     csrw    mepc, t0
  .endm
  
 +.macro restore_world
@@ -223,12 +225,12 @@ index 2e1c7c477f..7c5b87b418 100644
 +    fence
 +.endm
 +
- 	.global rtos_int_enter
- 	.global rtos_int_exit
- 	.global _global_interrupt_handler
-@@ -141,6 +210,35 @@ _vector_table:
- 	/* Exception handler.*/
- 	.type _panic_handler, @function
+     .global rtos_int_enter
+     .global rtos_int_exit
+     .global _global_interrupt_handler
+@@ -148,6 +217,35 @@ _vector_table:
+     /* Exception handler.*/
+     .type _panic_handler, @function
  _panic_handler:
 +
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
@@ -259,13 +261,13 @@ index 2e1c7c477f..7c5b87b418 100644
 +    csrr    t0, mscratch
 +#endif
 +
- 	addi sp, sp, -RV_STK_FRMSZ /* allocate space on stack to store necessary registers */
- 	/* save general registers */
- 	sw ra,  RV_STK_RA(sp)
-@@ -175,6 +273,22 @@ _panic_handler:
- 	sw t6,  RV_STK_T6(sp)
- 	addi t0, sp, RV_STK_FRMSZ /* restore sp with the value when trap happened */
- 	sw t0,  RV_STK_SP(sp)
+     /* Allocate space on the stack and store general purpose registers */
+     save_general_regs RV_STK_FRMSZ
+ 
+@@ -159,6 +257,23 @@ _panic_handler:
+ 
+     /* Save CSRs */
+     sw    t0, RV_STK_SP(sp)
 +
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    /* If exception caused by ECALL, delegate to __ecall_handler and store
@@ -282,13 +284,14 @@ index 2e1c7c477f..7c5b87b418 100644
 +
 +_skip_ecall:
 +#endif
- 	csrr t0, mepc
- 	sw t0,  RV_STK_MEPC(sp)
- 	csrr t0, mstatus
-@@ -222,6 +336,43 @@ _interrupt_handler:
- 	/* entry */
- 	save_regs
- 	save_mepc
++
+     csrr  t0, mepc
+     sw    t0, RV_STK_MEPC(sp)
+     csrr  t0, mstatus
+@@ -221,6 +336,43 @@ _interrupt_handler:
+      * the interrupt happened. */
+     save_general_regs
+     save_mepc
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    save_world
 +
@@ -325,19 +328,27 @@ index 2e1c7c477f..7c5b87b418 100644
 +
 +    fence
 +1:
++#else
+ 
+     /* Though it is not necessary we save GP and SP here.
+      * SP is necessary to help GDB to properly unwind
+@@ -232,6 +384,7 @@ _interrupt_handler:
+     addi  t0, sp, CONTEXT_SIZE /* restore sp with the value when interrupt happened */
+     /* Save SP */
+     sw    t0, RV_STK_SP(sp)
 +#endif
  
- 	/* Before doing anythig preserve the stack pointer */
- 	/* It will be saved in current TCB, if needed */
-@@ -294,6 +445,9 @@ _interrupt_handler:
- 	/* restore the rest of the registers */
- 	csrw mcause, s1
- 	csrw mstatus, s2
+     /* Before doing anythig preserve the stack pointer */
+     /* It will be saved in current TCB, if needed */
+@@ -308,6 +461,9 @@ _interrupt_handler:
+     /* restore the rest of the registers */
+     csrw    mcause, s1
+     csrw    mstatus, s2
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    restore_world
 +#endif
- 	restore_mepc
- 	restore_regs
+     restore_mepc
+     restore_general_regs
  
 diff --git a/components/soc/esp32c3/include/soc/world_controller_reg.h b/components/soc/esp32c3/include/soc/world_controller_reg.h
 new file mode 100644
@@ -434,10 +445,10 @@ index ba0ae819cb..4199a52331 100644
  
  extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
 diff --git a/tools/idf_monitor.py b/tools/idf_monitor.py
-index 490178e53a..2ca18c7d04 100755
+index 7b744b6081..425de1ffd7 100755
 --- a/tools/idf_monitor.py
 +++ b/tools/idf_monitor.py
-@@ -854,6 +854,11 @@ class Monitor(object):
+@@ -857,6 +857,11 @@ class Monitor(object):
      def process_panic_output(self, panic_output):
          panic_output_decode_script = os.path.join(os.path.dirname(__file__), '..', 'tools', 'gdb_panic_server.py')
          panic_output_file = None
@@ -449,7 +460,7 @@ index 490178e53a..2ca18c7d04 100755
          try:
              # On Windows, the temporary file can't be read unless it is closed.
              # Set delete=False and delete the file manually later.
-@@ -864,6 +869,7 @@ class Monitor(object):
+@@ -867,6 +872,7 @@ class Monitor(object):
              cmd = [self.toolchain_prefix + 'gdb',
                     '--batch', '-n',
                     self.elf_file,
