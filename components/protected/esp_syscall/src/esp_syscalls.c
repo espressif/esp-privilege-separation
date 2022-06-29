@@ -72,6 +72,8 @@ typedef enum {
     ESP_EVENT_MAX_INDEX
 } esp_event_index_t;
 
+static bool _is_user_app_up;
+
 static esp_event_base_t esp_event_map_arr[ESP_EVENT_MAX_INDEX];
 
 static DRAM_ATTR int usr_dispatcher_queue_index;
@@ -279,8 +281,6 @@ int sys_xTaskCreate(TaskFunction_t pvTaskCode,
                                    const BaseType_t xCoreID,
                                    usr_task_ctx_t *task_ctx)
 {
-    static bool _is_user_app_up;
-
     if (!is_valid_user_i_addr(pvTaskCode)) {
         ESP_LOGE(TAG, "Incorrect address of user function");
         return pdFAIL;
@@ -2111,6 +2111,10 @@ IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, 
 
 void esp_syscall_clear_user_resourses(void)
 {
+#ifdef CONFIG_PA_CONSOLE_ENABLE
+    // Delete the uart driver used in console
+    sys_uart_driver_delete(CONFIG_ESP_CONSOLE_UART_NUM);
+#endif
     int user_handles = esp_map_get_allocated_size();
     usr_dispatcher_queue_index = 0;
     usr_dispatcher_queue_handle = NULL;
@@ -2157,6 +2161,9 @@ void esp_syscall_clear_user_resourses(void)
                 break;
         }
     }
+
+    // Clear _is_user_app_up flag to enable restarting of user app
+    _is_user_app_up = 0;
 }
 
 #ifdef CONFIG_ESP_SYSCALL_VERIFY_RETURNED_POINTERS
