@@ -32,6 +32,7 @@
 #include <app_insights.h>
 
 #include "app_priv.h"
+#include "app_ota.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -71,6 +72,7 @@ void user_main()
 {
     usr_esp_rmaker_kernel_init();
     app_driver_init();
+    app_ota_init();
     /* Initialize the ESP RainMaker Agent.
      * Note that this should be called after app_wifi_init() but before app_wifi_start()
      * */
