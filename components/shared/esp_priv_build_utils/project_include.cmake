@@ -80,7 +80,6 @@ externalproject_add(user_app
         -DSDKCONFIG=${sdkconfig} -DPROTECTED_CONFIG_DIR=${config_dir} \
         -DIDF_PATH=${idf_path} -DIDF_TARGET=${idf_target} \
         -DPYTHON_DEPS_CHECKED=1 -DPYTHON=${python} \
-        -DCUSTOM_SYSCALL_TBL=${CUSTOM_SYSCALL_TBL} \
         -DCCACHE_ENABLE=${CCACHE_ENABLE} \
         -DDEFSYM_LIST=\"$DEFSYM\" \
         ${extra_cmake_args} \
