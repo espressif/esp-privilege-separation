@@ -1,0 +1,9 @@
+menu "ESP User OTA"
+
+    config ESP_USER_OTA_SKIP_VERSION_CHECK
+        bool "Skip firmware version check"
+        default n
+        help
+            This allows you to skip the firmware version check.
+
+endmenu

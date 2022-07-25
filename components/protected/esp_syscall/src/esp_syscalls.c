@@ -28,6 +28,8 @@
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include <nvs_flash.h>
+#include <esp_priv_access_ota_utils.h>
+#include <esp_user_ota.h>
 #include "syscall_structs.h"
 #include "esp_map.h"
 
@@ -2107,6 +2109,24 @@ IRAM_ATTR esp_err_t esp_syscall_spawn_user_task(void *user_entry, int stack_sz, 
         return ESP_OK;
     }
     return ESP_FAIL;
+}
+
+esp_err_t sys_esp_user_ota_cancel_rollback(void)
+{
+#ifdef CONFIG_PA_ENABLE_USER_APP_ROLLBACK
+    return esp_priv_access_mark_user_app_valid_and_cancel_rollback();
+#else
+    return ESP_FAIL;
+#endif
+}
+
+esp_err_t sys_esp_ota_user_app(char *url, int len)
+{
+    if (!is_valid_user_d_addr(url) || !is_valid_user_d_addr(url + len)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_user_ota_start(url);
+    return ESP_OK;
 }
 
 void esp_syscall_clear_user_resourses(void)

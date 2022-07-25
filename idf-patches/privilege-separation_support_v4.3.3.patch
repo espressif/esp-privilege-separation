@@ -1,3 +1,20 @@
+diff --git a/components/app_update/esp_ota_ops.c b/components/app_update/esp_ota_ops.c
+index 8096591382..aaf09e82f7 100644
+--- a/components/app_update/esp_ota_ops.c
++++ b/components/app_update/esp_ota_ops.c
+@@ -66,8 +66,10 @@ static bool is_ota_partition(const esp_partition_t *p)
+ {
+     return (p != NULL
+             && p->type == ESP_PARTITION_TYPE_APP
+-            && p->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_0
+-            && p->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MAX);
++            && ((p->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_0
++            && p->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MAX)
++            || (p->subtype >= ESP_PARTITION_SUBTYPE_APP_USER_0
++            && p->subtype <= ESP_PARTITION_SUBTYPE_APP_USER_1)));
+ }
+ 
+ // Read otadata partition and fill array from two otadata structures.
 diff --git a/components/esp32c3/CMakeLists.txt b/components/esp32c3/CMakeLists.txt
 index 393464f5ab..eeec4fd178 100644
 --- a/components/esp32c3/CMakeLists.txt
@@ -128,6 +145,38 @@ index f7e815beff..e50c0db74d 100644
      if (reserved & BIT(interrupt_number)) {
          return true;
      }
+diff --git a/components/partition_table/gen_esp32part.py b/components/partition_table/gen_esp32part.py
+index ec04b9b0b2..45f44b4119 100755
+--- a/components/partition_table/gen_esp32part.py
++++ b/components/partition_table/gen_esp32part.py
+@@ -37,6 +37,8 @@ PARTITION_TABLE_SIZE  = 0x1000  # Size of partition table
+ 
+ MIN_PARTITION_SUBTYPE_APP_OTA = 0x10
+ NUM_PARTITION_SUBTYPE_APP_OTA = 16
++MIN_PARTITION_SUBTYPE_USER_APP_OTA = 0x40
++NUM_PARTITION_SUBTYPE_USER_APP_OTA = 2
+ 
+ __version__ = '1.2'
+ 
+@@ -62,6 +64,7 @@ SUBTYPES = {
+         'nvs_keys': 0x04,
+         'efuse': 0x05,
+         'undefined': 0x06,
++        'user_ota': 0x50,
+         'esphttpd': 0x80,
+         'fat': 0x81,
+         'spiffs': 0x82,
+@@ -278,6 +281,10 @@ class PartitionDefinition(object):
+     for ota_slot in range(NUM_PARTITION_SUBTYPE_APP_OTA):
+         SUBTYPES[TYPES['app']]['ota_%d' % ota_slot] = MIN_PARTITION_SUBTYPE_APP_OTA + ota_slot
+ 
++    # add subtypes for the 2 User OTA slot values ("ota_XX, etc.")
++    for ota_slot in range(NUM_PARTITION_SUBTYPE_USER_APP_OTA):
++        SUBTYPES[TYPES['app']]['user_%d' % ota_slot] = MIN_PARTITION_SUBTYPE_USER_APP_OTA + ota_slot
++
+     def __init__(self):
+         self.name = ''
+         self.type = None
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
 index 89bf09e1e9..16bd55b690 100644
 --- a/components/riscv/vectors.S
@@ -444,8 +493,25 @@ index ba0ae819cb..4199a52331 100644
  
  
  extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
+diff --git a/components/spi_flash/include/esp_partition.h b/components/spi_flash/include/esp_partition.h
+index f1ce8dee94..2291d24756 100644
+--- a/components/spi_flash/include/esp_partition.h
++++ b/components/spi_flash/include/esp_partition.h
+@@ -77,6 +77,12 @@ typedef enum {
+     ESP_PARTITION_SUBTYPE_APP_OTA_14 = ESP_PARTITION_SUBTYPE_APP_OTA_MIN + 14,//!< OTA partition 14
+     ESP_PARTITION_SUBTYPE_APP_OTA_15 = ESP_PARTITION_SUBTYPE_APP_OTA_MIN + 15,//!< OTA partition 15
+     ESP_PARTITION_SUBTYPE_APP_OTA_MAX = ESP_PARTITION_SUBTYPE_APP_OTA_MIN + 16,//!< Max subtype of OTA partition
++
++    ESP_PARTITION_SUBTYPE_APP_USER_MIN = 0x40,
++    ESP_PARTITION_SUBTYPE_APP_USER_0 = ESP_PARTITION_SUBTYPE_APP_USER_MIN + 0,
++    ESP_PARTITION_SUBTYPE_APP_USER_1 = ESP_PARTITION_SUBTYPE_APP_USER_MIN + 1,
++    ESP_PARTITION_SUBTYPE_DATA_USER_OTA = 0x50,
++
+     ESP_PARTITION_SUBTYPE_APP_TEST = 0x20,                                    //!< Test application partition
+ 
+     ESP_PARTITION_SUBTYPE_DATA_OTA = 0x00,                                    //!< OTA selection partition
 diff --git a/tools/idf_monitor.py b/tools/idf_monitor.py
-index 7b744b6081..425de1ffd7 100755
+index 40f2e83717..def0b90b0d 100755
 --- a/tools/idf_monitor.py
 +++ b/tools/idf_monitor.py
 @@ -857,6 +857,11 @@ class Monitor(object):

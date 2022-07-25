@@ -39,10 +39,33 @@ else()
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=__errno")
 
     # Add user_app binary to the esptool flash arguments
-    set(partition user_app)
+    partition_table_get_partition_info(partition "--partition-type app --partition-subtype user_0" "name")
     set(image_file ${PROJECT_DIR}/build/user_app/user_app.bin)
     partition_table_get_partition_info(offset "--partition-name ${partition}" "offset")
     esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
+
+    # Get info about user_otadata partition
+    partition_table_get_partition_info(otadata_offset "--partition-type data --partition-subtype user_ota" "offset")
+    partition_table_get_partition_info(otadata_size "--partition-type data --partition-subtype user_ota" "size")
+
+    if(otadata_size AND otadata_offset)
+        idf_build_get_property(build_dir BUILD_DIR)
+        set(blank_user_otadata_file ${build_dir}/user_ota_data_initial.bin)
+        idf_build_get_property(idf_path IDF_PATH)
+        idf_build_get_property(python PYTHON)
+
+        idf_component_get_property(partition_table_dir partition_table COMPONENT_DIR)
+
+        add_custom_command(OUTPUT ${blank_user_otadata_file}
+            COMMAND ${python} ${partition_table_dir}/gen_empty_partition.py
+            ${otadata_size} ${blank_user_otadata_file})
+
+        add_custom_target(blank_user_ota_data ALL DEPENDS ${blank_user_otadata_file})
+        add_dependencies(flash blank_user_ota_data)
+        partition_table_get_partition_info(otadata_part_name "--partition-type data --partition-subtype user_ota" "name")
+        esptool_py_flash_target_image(flash "${otadata_part_name}" "${otadata_offset}" "${blank_user_otadata_file}")
+    endif()
+
     # Add dependency of idf.py flash on user_app.
     # This ensures user_app is rebuilt when idf.py flash command is used.
     add_dependencies(flash user_app)

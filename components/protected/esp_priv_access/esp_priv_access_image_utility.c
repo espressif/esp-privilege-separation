@@ -16,6 +16,7 @@
 #include <esp_image_format.h>
 #include <esp_spi_flash.h>
 #include <esp_partition.h>
+#include "esp_priv_access_ota_utils.h"
 #include "esp_log.h"
 
 #include "esp32c3/rom/cache.h"
@@ -120,7 +121,7 @@ static IRAM_ATTR NOINLINE_ATTR void user_load_app(const esp_image_metadata_t* da
 
 esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data)
 {
-    const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
+    const esp_partition_t *user_partition = esp_priv_access_get_boot_partition();
     if (user_partition == NULL) {
         ESP_LOGW(TAG, "User code partition not found");
         return ESP_ERR_NOT_FOUND;
@@ -161,7 +162,7 @@ esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data)
 
 esp_err_t esp_priv_access_load_user_app_desc(usr_custom_app_desc_t *app_desc)
 {
-    const esp_partition_t *user_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "user_app");
+    const esp_partition_t *user_partition = esp_priv_access_get_boot_partition();
 
     if (user_partition == NULL) {
         ESP_LOGE(TAG, "User code partition not found");

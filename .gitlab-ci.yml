@@ -26,7 +26,7 @@ after_script:
 .setup_idf_v4_3: &setup_idf_v4_3
   # Cloning esp-idf
   - echo Cloning esp-idf - Started
-  - git clone --recursive --branch v4.3.3 --depth 1 https://github.com/espressif/esp-idf.git
+  - git clone --recursive --branch release/v4.3 --depth 1 https://github.com/espressif/esp-idf.git
   - pushd esp-idf
   - echo Cloning esp-idf - Done
   # Running install.sh
@@ -74,6 +74,10 @@ after_script:
   - popd
   # Build esp_http_client
   - pushd $CI_PROJECT_DIR/examples/esp_http_client
+  - idf.py build
+  - popd
+  # Build esp_user_ota
+  - pushd $CI_PROJECT_DIR/examples/esp_user_ota
   - idf.py build
   - popd
 

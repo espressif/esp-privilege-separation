@@ -67,6 +67,27 @@ esp_err_t gpio_softisr_handler_add(gpio_num_t gpio_num, gpio_isr_t softisr_handl
  */
 esp_err_t gpio_softisr_handler_remove(usr_gpio_handle_t gpio_handle);
 
+/**
+ * @brief Start user app OTA
+ *
+ * @param url URL to download user app firmware
+ * @param len URL length
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_FAIL otherwise
+ */
+esp_err_t usr_esp_ota_user_app(char *url, int len);
+
+/**
+ * @brief Mark user app as valid and cancel rollback
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_FAIL otherwise
+ */
+esp_err_t usr_esp_user_ota_cancel_rollback(void);
+
 #ifdef __cplusplus
 }
 #endif

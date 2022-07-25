@@ -1,3 +1,20 @@
+diff --git a/components/app_update/esp_ota_ops.c b/components/app_update/esp_ota_ops.c
+index c81dff19f8..0fe6e0efd7 100644
+--- a/components/app_update/esp_ota_ops.c
++++ b/components/app_update/esp_ota_ops.c
+@@ -56,8 +56,10 @@ static bool is_ota_partition(const esp_partition_t *p)
+ {
+     return (p != NULL
+             && p->type == ESP_PARTITION_TYPE_APP
+-            && p->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_0
+-            && p->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MAX);
++            && ((p->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_0
++            && p->subtype < ESP_PARTITION_SUBTYPE_APP_OTA_MAX)
++            || (p->subtype >= ESP_PARTITION_SUBTYPE_APP_USER_0
++            && p->subtype <= ESP_PARTITION_SUBTYPE_APP_USER_1)));
+ }
+ 
+ // Read otadata partition and fill array from two otadata structures.
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
 index 5d1b9ce8d1..b40c491651 100644
 --- a/components/esp32c3/Kconfig
@@ -156,6 +173,38 @@ index 3ca3272417..ff5266d5f1 100644
  
  
  extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
+diff --git a/components/partition_table/gen_esp32part.py b/components/partition_table/gen_esp32part.py
+index f1423a310e..bc6ce1a40d 100755
+--- a/components/partition_table/gen_esp32part.py
++++ b/components/partition_table/gen_esp32part.py
+@@ -37,6 +37,8 @@ PARTITION_TABLE_SIZE  = 0x1000  # Size of partition table
+ 
+ MIN_PARTITION_SUBTYPE_APP_OTA = 0x10
+ NUM_PARTITION_SUBTYPE_APP_OTA = 16
++MIN_PARTITION_SUBTYPE_USER_APP_OTA = 0x40
++NUM_PARTITION_SUBTYPE_USER_APP_OTA = 2
+ 
+ __version__ = '1.2'
+ 
+@@ -74,6 +76,7 @@ SUBTYPES = {
+         'nvs_keys': 0x04,
+         'efuse': 0x05,
+         'undefined': 0x06,
++        'user_ota': 0x50,
+         'esphttpd': 0x80,
+         'fat': 0x81,
+         'spiffs': 0x82,
+@@ -310,6 +313,10 @@ class PartitionDefinition(object):
+     for ota_slot in range(NUM_PARTITION_SUBTYPE_APP_OTA):
+         SUBTYPES[TYPES['app']]['ota_%d' % ota_slot] = MIN_PARTITION_SUBTYPE_APP_OTA + ota_slot
+ 
++    # add subtypes for the 2 User OTA slot values ("ota_XX, etc.")
++    for ota_slot in range(NUM_PARTITION_SUBTYPE_USER_APP_OTA):
++        SUBTYPES[TYPES['app']]['user_%d' % ota_slot] = MIN_PARTITION_SUBTYPE_USER_APP_OTA + ota_slot
++
+     def __init__(self):
+         self.name = ''
+         self.type = None
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
 index 1006d5bea5..c583e1d824 100644
 --- a/components/riscv/vectors.S
@@ -439,6 +488,23 @@ index 0000000000..57eeb1e2bd
 +#define WORLD_CONTROLLER_EDMA_AES                               (WORLD_CONTROL_BASE + 0x918)
 +#define WORLD_CONTROLLER_EDMA_SHA                               (WORLD_CONTROL_BASE + 0x91C)
 +#define WORLD_CONTROLLER_EDMA_ADC_DAC                           (WORLD_CONTROL_BASE + 0x920)
+diff --git a/components/spi_flash/include/esp_partition.h b/components/spi_flash/include/esp_partition.h
+index 550bf6b6b2..de4bc9a9bc 100644
+--- a/components/spi_flash/include/esp_partition.h
++++ b/components/spi_flash/include/esp_partition.h
+@@ -79,6 +79,12 @@ typedef enum {
+     ESP_PARTITION_SUBTYPE_APP_OTA_14 = ESP_PARTITION_SUBTYPE_APP_OTA_MIN + 14,//!< OTA partition 14
+     ESP_PARTITION_SUBTYPE_APP_OTA_15 = ESP_PARTITION_SUBTYPE_APP_OTA_MIN + 15,//!< OTA partition 15
+     ESP_PARTITION_SUBTYPE_APP_OTA_MAX = ESP_PARTITION_SUBTYPE_APP_OTA_MIN + 16,//!< Max subtype of OTA partition
++
++    ESP_PARTITION_SUBTYPE_APP_USER_MIN = 0x40,
++    ESP_PARTITION_SUBTYPE_APP_USER_0 = ESP_PARTITION_SUBTYPE_APP_USER_MIN + 0,
++    ESP_PARTITION_SUBTYPE_APP_USER_1 = ESP_PARTITION_SUBTYPE_APP_USER_MIN + 1,
++    ESP_PARTITION_SUBTYPE_DATA_USER_OTA = 0x50,
++
+     ESP_PARTITION_SUBTYPE_APP_TEST = 0x20,                                    //!< Test application partition
+ 
+     ESP_PARTITION_SUBTYPE_DATA_OTA = 0x00,                                    //!< OTA selection partition
 diff --git a/tools/idf_monitor_base/gdbhelper.py b/tools/idf_monitor_base/gdbhelper.py
 index f32d4fb688..55d7dda1fc 100644
 --- a/tools/idf_monitor_base/gdbhelper.py

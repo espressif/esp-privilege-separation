@@ -109,4 +109,10 @@ menu "Privilege separation"
             Set the user dispatcher task stack size.
             All the user registered ISRs and event handlers will be executed from this task's context
 
+    config PA_ENABLE_USER_APP_ROLLBACK
+        bool "Enable user app rollback"
+        default n
+        help
+            Enable user app rollback after performing OTA upgrade.
+
 endmenu

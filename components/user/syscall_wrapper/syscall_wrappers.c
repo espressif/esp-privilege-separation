@@ -948,6 +948,16 @@ esp_err_t usr_esp_get_protected_heap_stats(protected_heap_stats_t *stats)
     return EXECUTE_SYSCALL(stats, __NR_esp_get_protected_heap_stats);
 }
 
+esp_err_t usr_esp_user_ota_cancel_rollback(void)
+{
+    return EXECUTE_SYSCALL(__NR_esp_user_ota_cancel_rollback);
+}
+
+esp_err_t usr_esp_ota_user_app(char *url, int len)
+{
+    return EXECUTE_SYSCALL(url, len, __NR_esp_ota_user_app);
+}
+
 UIRAM_ATTR bool usr_spi_flash_cache_enabled(void)
 {
     // Flash cache will always be enabled in user app.
