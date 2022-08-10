@@ -16,10 +16,10 @@ index c81dff19f8..0fe6e0efd7 100644
  
  // Read otadata partition and fill array from two otadata structures.
 diff --git a/components/esp32c3/Kconfig b/components/esp32c3/Kconfig
-index 5d1b9ce8d1..b40c491651 100644
+index 5c7c072c46..705336cfd3 100644
 --- a/components/esp32c3/Kconfig
 +++ b/components/esp32c3/Kconfig
-@@ -184,4 +184,14 @@ menu "ESP32C3-Specific"
+@@ -187,4 +187,14 @@ menu "ESP32C3-Specific"
              If enabled, this disables the linking of binary libraries in the application build. Note
              that after enabling this Wi-Fi/Bluetooth will not work.
  
@@ -35,7 +35,7 @@ index 5d1b9ce8d1..b40c491651 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/esp_system/ld/esp32c3/sections.ld.in b/components/esp_system/ld/esp32c3/sections.ld.in
-index e6fe6307a4..0a5ee30c4d 100644
+index 9458dc39c3..0b8944e9ee 100644
 --- a/components/esp_system/ld/esp32c3/sections.ld.in
 +++ b/components/esp_system/ld/esp32c3/sections.ld.in
 @@ -4,6 +4,16 @@
@@ -69,7 +69,7 @@ index e6fe6307a4..0a5ee30c4d 100644
      /* Vectors go to start of IRAM */
      ASSERT(ABSOLUTE(.) % 0x100 == 0, "vector address must be 256 byte aligned");
      KEEP(*(.exception_vectors.text));
-@@ -208,6 +225,27 @@ SECTIONS
+@@ -206,6 +223,27 @@ SECTIONS
      _bss_end = ABSOLUTE(.);
    } > dram0_0_seg
  
@@ -174,10 +174,10 @@ index 3ca3272417..ff5266d5f1 100644
  
  extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
 diff --git a/components/partition_table/gen_esp32part.py b/components/partition_table/gen_esp32part.py
-index f1423a310e..bc6ce1a40d 100755
+index ba6ba6c5da..1a554a74ce 100755
 --- a/components/partition_table/gen_esp32part.py
 +++ b/components/partition_table/gen_esp32part.py
-@@ -37,6 +37,8 @@ PARTITION_TABLE_SIZE  = 0x1000  # Size of partition table
+@@ -27,6 +27,8 @@ PARTITION_TABLE_SIZE  = 0x1000  # Size of partition table
  
  MIN_PARTITION_SUBTYPE_APP_OTA = 0x10
  NUM_PARTITION_SUBTYPE_APP_OTA = 16
@@ -186,7 +186,7 @@ index f1423a310e..bc6ce1a40d 100755
  
  __version__ = '1.2'
  
-@@ -74,6 +76,7 @@ SUBTYPES = {
+@@ -64,6 +66,7 @@ SUBTYPES = {
          'nvs_keys': 0x04,
          'efuse': 0x05,
          'undefined': 0x06,
@@ -194,7 +194,7 @@ index f1423a310e..bc6ce1a40d 100755
          'esphttpd': 0x80,
          'fat': 0x81,
          'spiffs': 0x82,
-@@ -310,6 +313,10 @@ class PartitionDefinition(object):
+@@ -311,6 +314,10 @@ class PartitionDefinition(object):
      for ota_slot in range(NUM_PARTITION_SUBTYPE_APP_OTA):
          SUBTYPES[TYPES['app']]['ota_%d' % ota_slot] = MIN_PARTITION_SUBTYPE_APP_OTA + ota_slot
  
@@ -206,21 +206,23 @@ index f1423a310e..bc6ce1a40d 100755
          self.name = ''
          self.type = None
 diff --git a/components/riscv/vectors.S b/components/riscv/vectors.S
-index 1006d5bea5..c583e1d824 100644
+index 89bf09e1e9..b44ed2b23c 100644
 --- a/components/riscv/vectors.S
 +++ b/components/riscv/vectors.S
 @@ -16,9 +16,26 @@
  #include "riscv/rvruntime-frames.h"
  #include "soc/soc_caps.h"
  #include "sdkconfig.h"
+-
+-
+-    .equ SAVE_REGS, 32
 +#include "soc/sensitive_reg.h"
 +#include "soc/world_controller_reg.h"
 +#include "soc/extmem_reg.h"
- 
++
 +#define W1_EXCEPTION_MAGIC  21
 +#define EXCCAUSE_ECALL  11
- 
--	.equ SAVE_REGS, 32
++
 +/*
 + * uxTCBNumber and uxTaskNumber members are added in TCB structure when
 + * FreeRTOS Trace facility is enabled. WORLD offset is changed by 8 bytes
@@ -233,12 +235,12 @@ index 1006d5bea5..c583e1d824 100644
 +#endif
 +
 +    /* Save CSRs when servicing interrupts */
-+	.equ SAVE_REGS, 40
- 	.equ CONTEXT_SIZE, (SAVE_REGS * 4)
- 	.equ panic_from_exception, xt_unhandled_exception
- 	.equ panic_from_isr, panicHandler
-@@ -61,6 +78,35 @@
- 	sw   t0, RV_STK_MEPC(sp)
++    .equ SAVE_REGS, 40
+     .equ CONTEXT_SIZE, (SAVE_REGS * 4)
+     .equ panic_from_exception, xt_unhandled_exception
+     .equ panic_from_isr, panicHandler
+@@ -65,6 +82,35 @@
+     sw   t0, RV_STK_MEPC(sp)
  .endm
  
 +.macro save_world
@@ -270,11 +272,11 @@ index 1006d5bea5..c583e1d824 100644
 +    fence
 +.endm
 +
- .macro restore_regs
- 	lw   ra,  RV_STK_RA(sp)
- 	lw   tp,  RV_STK_TP(sp)
-@@ -99,6 +145,29 @@
- 	csrw	mepc, t0
+ /* Restore the general purpose registers (excluding gp) from the context on
+  * the stack. The context is then deallocated. The default size is CONTEXT_SIZE
+  * but it can be overriden. */
+@@ -106,6 +152,29 @@
+     csrw    mepc, t0
  .endm
  
 +.macro restore_world
@@ -300,12 +302,12 @@ index 1006d5bea5..c583e1d824 100644
 +    fence
 +.endm
 +
- 	.global rtos_int_enter
- 	.global rtos_int_exit
- 	.global _global_interrupt_handler
-@@ -141,6 +210,35 @@ _vector_table:
- 	/* Exception handler.*/
- 	.type _panic_handler, @function
+     .global rtos_int_enter
+     .global rtos_int_exit
+     .global _global_interrupt_handler
+@@ -148,6 +217,35 @@ _vector_table:
+     /* Exception handler.*/
+     .type _panic_handler, @function
  _panic_handler:
 +
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
@@ -336,13 +338,13 @@ index 1006d5bea5..c583e1d824 100644
 +    csrr    t0, mscratch
 +#endif
 +
- 	addi sp, sp, -RV_STK_FRMSZ /* allocate space on stack to store necessary registers */
- 	/* save general registers */
- 	sw ra,  RV_STK_RA(sp)
-@@ -175,6 +273,22 @@ _panic_handler:
- 	sw t6,  RV_STK_T6(sp)
- 	addi t0, sp, RV_STK_FRMSZ /* restore sp with the value when trap happened */
- 	sw t0,  RV_STK_SP(sp)
+     /* Allocate space on the stack and store general purpose registers */
+     save_general_regs RV_STK_FRMSZ
+ 
+@@ -159,6 +257,22 @@ _panic_handler:
+ 
+     /* Save CSRs */
+     sw    t0, RV_STK_SP(sp)
 +
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    /* If exception caused by ECALL, delegate to __ecall_handler and store
@@ -359,13 +361,13 @@ index 1006d5bea5..c583e1d824 100644
 +
 +_skip_ecall:
 +#endif
- 	csrr t0, mepc
- 	sw t0,  RV_STK_MEPC(sp)
- 	csrr t0, mstatus
-@@ -222,6 +336,43 @@ _interrupt_handler:
- 	/* entry */
- 	save_regs
- 	save_mepc
+     csrr  t0, mepc
+     sw    t0, RV_STK_MEPC(sp)
+     csrr  t0, mstatus
+@@ -221,7 +335,43 @@ _interrupt_handler:
+      * the interrupt happened. */
+     save_general_regs
+     save_mepc
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    save_world
 +
@@ -373,7 +375,7 @@ index 1006d5bea5..c583e1d824 100644
 +    sw    gp, RV_STK_GP(sp)
 +
 +    addi  t0, sp, CONTEXT_SIZE /* restore sp with the value when trap happened */
-+
+ 
 +    sw    t0, RV_STK_SP(sp)
 +    csrr  t0, mstatus
 +    sw    t0, RV_STK_MSTATUS(sp)
@@ -402,19 +404,27 @@ index 1006d5bea5..c583e1d824 100644
 +
 +    fence
 +1:
++#else
+     /* Though it is not necessary we save GP and SP here.
+      * SP is necessary to help GDB to properly unwind
+      * the backtrace of threads preempted by interrupts (OS tick etc.).
+@@ -232,6 +382,7 @@ _interrupt_handler:
+     addi  t0, sp, CONTEXT_SIZE /* restore sp with the value when interrupt happened */
+     /* Save SP */
+     sw    t0, RV_STK_SP(sp)
 +#endif
  
- 	/* Before doing anythig preserve the stack pointer */
- 	/* It will be saved in current TCB, if needed */
-@@ -294,6 +445,9 @@ _interrupt_handler:
- 	/* restore the rest of the registers */
- 	csrw mcause, s1
- 	csrw mstatus, s2
+     /* Before doing anythig preserve the stack pointer */
+     /* It will be saved in current TCB, if needed */
+@@ -308,6 +459,9 @@ _interrupt_handler:
+     /* restore the rest of the registers */
+     csrw    mcause, s1
+     csrw    mstatus, s2
 +#if CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    restore_world
 +#endif
- 	restore_mepc
- 	restore_regs
+     restore_mepc
+     restore_general_regs
  
 diff --git a/components/soc/esp32c3/include/soc/world_controller_reg.h b/components/soc/esp32c3/include/soc/world_controller_reg.h
 new file mode 100644
