@@ -16,7 +16,7 @@ This demo example is split into Protected app and User app and following are the
 
 ```
 $ cd $IDF_PATH
-$ git checkout v4.4.1
+$ git checkout v4.4.2
 $ git submodule update --init --recursive
 $ ./install.sh
 $ source ./export.sh
@@ -25,7 +25,7 @@ $ source ./export.sh
 #### Apply patch on IDF:
 
 ```
-$ git apply -v <path/to/privilege-separation>/idf-patches/privilege-separation_support_v4.4.1.patch
+$ git apply -v <path/to/privilege-separation>/idf-patches/privilege-separation_support_v4.4.2.patch
 ```
 
 ### Hardware

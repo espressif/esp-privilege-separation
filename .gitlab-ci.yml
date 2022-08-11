@@ -44,7 +44,7 @@ after_script:
 .setup_idf_v4_4: &setup_idf_v4_4
   # Cloning esp-idf
   - echo Cloning esp-idf - Started
-  - git clone --recursive --branch v4.4.1 --depth 1 https://github.com/espressif/esp-idf.git
+  - git clone --recursive --branch v4.4.2 --depth 1 https://github.com/espressif/esp-idf.git
   - pushd esp-idf
   - echo Cloning esp-idf - Done
   # Running install.sh
@@ -56,7 +56,7 @@ after_script:
   - . export.sh
   - echo Running export.sh - Done
   # Applying patch for v4.4
-  - git apply -v $CI_PROJECT_DIR/idf-patches/privilege-separation_support_v4.4.1.patch
+  - git apply -v $CI_PROJECT_DIR/idf-patches/privilege-separation_support_v4.4.2.patch
   - popd
 
 .build_examples: &build_examples
