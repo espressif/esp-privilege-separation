@@ -108,5 +108,43 @@ add_custom_command(
     COMMENT "Generating list of libraries and object files from firmware image"
     VERBATIM
     )
+
 add_custom_target(gen_lib_list_in_json_fmt DEPENDS ${CMAKE_BINARY_DIR}/app_libs_and_objs.json)
+
+if(CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT)
+
+    idf_component_get_property(main_args esptool_py FLASH_ARGS)
+    idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
+
+    partition_table_get_partition_info(partition "--partition-type app --partition-subtype user_0" "name")
+    partition_table_get_partition_info(offset "--partition-name ${partition}" "offset")
+
+    # String for printing flash command
+    string(REPLACE ";" " " esptoolpy_write_flash
+        "${ESPTOOLPY} --port=(PORT) --baud=(BAUD) ${main_args} "
+        "write_flash ${sub_args}")
+
+    get_filename_component(ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../../.. ABSOLUTE)
+    set(secure_boot_util "python ${ROOT_DIR}/tools/esp_ps_secure_boot_util.py")
+    add_custom_command(TARGET gen_lib_list_in_json_fmt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "=============================================================================="
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "User app built.Secure boot is enabled, user_app needs to be signed separately."
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "To sign and append certificate, run:"
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "\t${secure_boot_util} sign_user_app --user_cert <user_app_cert.pem> --user_keyfile <user_app_priv_key.pem>"
+            " -o ${CMAKE_BINARY_DIR}/user_app/user_app_signed.bin ${CMAKE_BINARY_DIR}/user_app/user_app.bin"
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "=============================================================================="
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "To flash the signed binary, run:"
+        COMMAND ${CMAKE_COMMAND} -E echo
+             "\t${esptoolpy_write_flash} ${offset} ${PROJECT_DIR}/build/user_app/user_app_signed.bin"
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "=============================================================================="
+        VERBATIM)
+endif()
+
 add_dependencies(app gen_lib_list_in_json_fmt)

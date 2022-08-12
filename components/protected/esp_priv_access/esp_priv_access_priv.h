@@ -20,4 +20,6 @@ esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data);
 
 esp_err_t esp_priv_access_load_user_app_desc(usr_custom_app_desc_t *app_desc);
 
+esp_err_t esp_priv_access_verify_user_app(const esp_partition_t *user_partition);
+
 void esp_priv_access_handle_crashed_task(void);

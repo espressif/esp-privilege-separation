@@ -1,4 +1,23 @@
-menu "Privilege separation"
+menu "Privilege Separation"
+
+    menu "Security features"
+
+    config PA_ENABLE_USER_APP_SECURE_BOOT
+        bool "Enable user app secure boot"
+        default n
+        help
+            If this option is set, protected application will verify whether the user app is signed by a trusted source.
+            For more details, refer to Secure boot section in the documentation
+
+    config PA_CA_CERT_FILE
+        string "Protected app CA certificate file"
+        depends on PA_ENABLE_USER_APP_SECURE_BOOT
+        default "protected_ca_cert.pem"
+        help
+            This is the CA certificate that will be embedded inside the protected application. This CA will be used
+            to verify the user application by verifying the digital signature appended to user application.
+
+    endmenu
 
     menu "Memory allocation"
 
