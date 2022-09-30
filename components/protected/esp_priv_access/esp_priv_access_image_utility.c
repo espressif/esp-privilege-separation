@@ -40,6 +40,7 @@
 #include "soc_defs.h"
 
 #include "esp_priv_access_priv.h"
+#include "esp_priv_access.h"
 
 #define TAG "esp_priv_access_image_utility"
 

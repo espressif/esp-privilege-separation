@@ -45,3 +45,7 @@ idf_component_register(SRCS ${srcs}
                     PRIV_INCLUDE_DIRS "."
                     PRIV_REQUIRES bootloader_support spi_flash app_update console esp_priv_build_utils mbedtls
                     EMBED_TXTFILES ${cacert})
+
+if(CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT OR CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT)
+    target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_secure_boot_verify_rsa_signature_block")
+endif()

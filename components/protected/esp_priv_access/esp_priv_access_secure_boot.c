@@ -212,3 +212,32 @@ exit:
 
     return err;
 }
+
+extern esp_err_t __real_esp_secure_boot_verify_rsa_signature_block(const ets_secure_boot_signature_t *sig_block, const uint8_t *image_digest, uint8_t *verified_digest);
+
+esp_err_t __wrap_esp_secure_boot_verify_rsa_signature_block(const ets_secure_boot_signature_t *sig_block, const uint8_t *image_digest, uint8_t *verified_digest)
+{
+    if (sig_block->block[0].magic_byte == USER_APP_SECURE_BOOT_MAGIC) {
+        esp_err_t err;
+        mbedtls_rsa_context *rsa_pubkey = malloc(sizeof(mbedtls_rsa_context));
+        if (rsa_pubkey == NULL) {
+            ESP_LOGE(TAG, "Error allocating memory for public key");
+            return ESP_ERR_NO_MEM;
+        }
+        mbedtls_rsa_init(rsa_pubkey, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
+        sig_block_t *user_sig_block = (sig_block_t *)sig_block;
+        err = verify_user_app_certificate(user_sig_block, rsa_pubkey);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "User app certificate verification failed");
+            return err;
+        }
+        err = esp_priv_access_verify_rsa_signature_block(user_sig_block, image_digest, rsa_pubkey);
+        mbedtls_rsa_free(rsa_pubkey);
+        free(rsa_pubkey);
+        return err;
+    } else if (sig_block->block[0].magic_byte == ETS_SECURE_BOOT_V2_SIGNATURE_MAGIC) {
+        return __real_esp_secure_boot_verify_rsa_signature_block(sig_block, image_digest, verified_digest);
+    } else {
+        return ESP_ERR_IMAGE_INVALID;
+    }
+}
