@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <stdint.h>
 
 #define GET_MACRO(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
 #define EXECUTE_SYSCALL(...) GET_MACRO(__VA_ARGS__, \
