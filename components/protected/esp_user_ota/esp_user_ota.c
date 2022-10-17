@@ -27,6 +27,7 @@
 #include "errno.h"
 #include "esp_priv_access.h"
 #include "esp_console.h"
+#include "esp_secure_boot.h"
 
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/crc.h"
@@ -147,7 +148,7 @@ static void user_ota_task(void *pvParameter)
 
                         image_header_was_checked = true;
 
-                        err = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &update_handle);
+                        err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &update_handle);
                         if (err != ESP_OK) {
                             ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
                             http_cleanup(client);
@@ -209,6 +210,23 @@ static void user_ota_task(void *pvParameter)
             continue;
         }
 
+#if !defined(CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT) && defined(CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT)
+        /* When protected secure boot or signed OTA is enabled, the signature check will be done by esp_ota_end.
+         * Hence, verifying the signature here again becomes redundant.
+         * Explicitly verify the digital signature of user app if in case protected app secure boot or signed OTA is disabled.
+         */
+        err = esp_priv_access_verify_user_app(update_partition);
+        if (err != ESP_OK) {
+            if (err == ESP_ERR_IMAGE_INVALID) {
+                ESP_LOGE(TAG, "Image verification failed");
+            }
+            ESP_LOGE(TAG, "esp_ota_end failed (%s)!", esp_err_to_name(err));
+            http_cleanup(client);
+            xSemaphoreGive(_user_ota_sem);
+            continue;
+        }
+#endif
+
         err = esp_priv_access_set_boot_partition(update_partition);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
@@ -260,3 +278,34 @@ esp_err_t esp_user_ota_start(char *url)
     }
     return ESP_OK;
 }
+
+/* When protected app secure OTA or secure boot is enabled and user app secure boot is disabled,
+ * esp_ota_end will internally try to verify the digital signature for user app as well, which should not happen.
+ * To avoid that, we wrap esp_secure_boot_verify_rsa_signature_block and skip the signature check for user app.
+ *
+ * When user app secure boot is enabled, this definition of __wrap_esp_secure_boot_verify_rsa_signature_block is
+ * not picked up, instead the one defined in esp_priv_access_secure_boot.c is picked up.
+ */
+#if defined(CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT) && !defined(CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT)
+
+extern esp_err_t __real_esp_secure_boot_verify_rsa_signature_block(const ets_secure_boot_signature_t *sig_block, const uint8_t *image_digest, uint8_t *verified_digest);
+
+esp_err_t __wrap_esp_secure_boot_verify_rsa_signature_block(const ets_secure_boot_signature_t *sig_block, const uint8_t *image_digest, uint8_t *verified_digest)
+{
+    if (_user_ota_sem != NULL) {
+        if (xSemaphoreTake(_user_ota_sem, 0) != pdTRUE) {
+            /* User app OTA is in progress and since user app secure boot is not enabled,
+             * we return ESP_OK;
+             */
+            return ESP_OK;
+        } else {
+            xSemaphoreGive(_user_ota_sem);
+        }
+    }
+
+    /* In all other cases, its the protected app update that's happening.
+     * Call the real verify function to check the digital signature of the protected app.
+     */
+    return __real_esp_secure_boot_verify_rsa_signature_block(sig_block, image_digest, verified_digest);
+}
+#endif

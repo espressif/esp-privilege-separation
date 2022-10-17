@@ -8,3 +8,4 @@ Technical Details
    World and Permission Control <world_and_permission_control>
    System call <system-call>
    Design choices <design-choices>
+   Secure boot <secure_boot>

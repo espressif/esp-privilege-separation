@@ -10,4 +10,4 @@ set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../../components/protected
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-project(esp_http_client)
+project(esp_user_ota)

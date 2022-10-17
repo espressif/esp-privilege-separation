@@ -18,6 +18,7 @@
 #include <esp_partition.h>
 #include "esp_priv_access_ota_utils.h"
 #include "esp_log.h"
+#include "esp_fault.h"
 
 #include "esp32c3/rom/cache.h"
 #include "esp32c3/rom/efuse.h"
@@ -37,6 +38,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "soc_defs.h"
+
+#include "esp_priv_access_priv.h"
+#include "esp_priv_access.h"
 
 #define TAG "esp_priv_access_image_utility"
 
@@ -126,6 +130,17 @@ esp_err_t esp_priv_access_user_unpack(esp_image_metadata_t *user_img_data)
         ESP_LOGW(TAG, "User code partition not found");
         return ESP_ERR_NOT_FOUND;
     } else {
+#if CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT
+        esp_err_t err = ESP_ERR_IMAGE_INVALID;
+        err = esp_priv_access_verify_user_app(user_partition);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "User app signature invalid");
+            return ESP_ERR_IMAGE_INVALID;
+        } else {
+            ESP_FAULT_ASSERT(err == ESP_OK);
+        }
+#endif
+
         ESP_LOGD(TAG, "User code partition @ 0x%x (0x%x)", user_partition->address, user_partition->size);
 
         user_img_data->start_addr = user_partition->address;

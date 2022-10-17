@@ -121,6 +121,18 @@ esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn);
 esp_err_t esp_priv_access_user_boot();
 
 /**
+ * @brief Verify the digital signature appended at the end of the user application
+ *
+ * @param user_partition Pointer to user app partition handle
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_ERR_NO_MEM if there is no available free heap space
+ *      - ESP_ERR_IMAGE_INVALID if the image cannot be verified successfully
+ */
+esp_err_t esp_priv_access_verify_user_app(const esp_partition_t *user_partition);
+
+/**
  * @brief Reboots user app.
  *        Deletes all the user tasks and then calls esp_priv_access_user_boot
  */

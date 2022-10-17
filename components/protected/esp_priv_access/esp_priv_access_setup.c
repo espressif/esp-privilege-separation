@@ -22,6 +22,7 @@
 #include "esp_priv_access_priv.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "riscv/interrupt.h"
 #include "soc/world_controller_reg.h"
 #include "soc/sensitive_reg.h"
@@ -42,10 +43,24 @@
 #include "esp32c3/rom/rom_layout.h"
 #include "esp_heap_caps_init.h"
 
-static const char *TAG = "esp_priv_access";
+#ifdef CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT
+#define USER_BOOT_TASK_STACK_SZ         5120
+#else
+#define USER_BOOT_TASK_STACK_SZ         2560
+#endif
+
+#define USER_BOOT_TASK_PRIO             10
+
 #define RV_INT_NUM      2
 
 #define PA_INTR_ATTR IRAM_ATTR __attribute__((noinline))
+
+typedef struct {
+    SemaphoreHandle_t semph_handle;
+    esp_err_t ret;
+} user_boot_status_t;
+
+static const char *TAG = "esp_priv_access";
 
 extern intptr_t _vector_table;
 
@@ -357,8 +372,9 @@ esp_err_t esp_priv_access_user_set_entry(void *user_entry)
     return ESP_OK;
 }
 
-IRAM_ATTR esp_err_t esp_priv_access_user_boot()
+static void user_boot_task(void *args)
 {
+    user_boot_status_t *boot_status = (user_boot_status_t *)args;
     esp_image_metadata_t user_img_data = {0};
     esp_err_t ret = esp_priv_access_user_unpack(&user_img_data);
     if (ret == ESP_OK) {
@@ -373,7 +389,39 @@ IRAM_ATTR esp_err_t esp_priv_access_user_boot()
             ret = esp_priv_access_user_spawn_task(user_entry, CONFIG_PA_USER_MAIN_TASK_STACK_SIZE);
         }
     }
-     return ret;
+
+    boot_status->ret = ret;
+    xSemaphoreGive(boot_status->semph_handle);
+    vTaskDelete(NULL);
+}
+
+esp_err_t esp_priv_access_user_boot()
+{
+    user_boot_status_t boot_status;
+    boot_status.ret = ESP_FAIL;
+    boot_status.semph_handle = xSemaphoreCreateBinary();
+    if (boot_status.semph_handle == NULL) {
+        ESP_LOGE(TAG, "Error creating notifying semaphore");
+        return ESP_FAIL;
+    }
+
+    /* User boot needs to happen from a separate task because
+     * secure boot verification requires large stack space.
+     * We pass a struct which contains the semaphore and a variable that will
+     * reflect the status (success or failure) of the user app boot
+     */
+    if (xTaskCreate(user_boot_task, "User boot task", USER_BOOT_TASK_STACK_SZ, &boot_status, USER_BOOT_TASK_PRIO, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "Error creating user boot task");
+        vSemaphoreDelete(boot_status.semph_handle);
+        return ESP_FAIL;
+    }
+
+    /* Wait for user boot task to finish */
+    xSemaphoreTake(boot_status.semph_handle, portMAX_DELAY);
+
+    vSemaphoreDelete(boot_status.semph_handle);
+
+    return boot_status.ret;
 }
 
 /* Routine to suspend all the user space tasks */

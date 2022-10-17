@@ -38,11 +38,15 @@ else()
     # errno for user tasks is stored in TLS. --wrap __errno to use TLS errno if it is a user task.
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=__errno")
 
-    # Add user_app binary to the esptool flash arguments
-    partition_table_get_partition_info(partition "--partition-type app --partition-subtype user_0" "name")
-    set(image_file ${PROJECT_DIR}/build/user_app/user_app.bin)
-    partition_table_get_partition_info(offset "--partition-name ${partition}" "offset")
-    esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
+    # If user app secure boot is enabled, do not add the binary in the flash command
+    # User is required to sign and flash the binary separately
+    if(NOT CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT)
+        # Add user_app binary to the esptool flash arguments
+        partition_table_get_partition_info(partition "--partition-type app --partition-subtype user_0" "name")
+        set(image_file ${PROJECT_DIR}/build/user_app/user_app.bin)
+        partition_table_get_partition_info(offset "--partition-name ${partition}" "offset")
+        esptool_py_flash_target_image(flash "${partition}" "${offset}" "${image_file}")
+    endif()
 
     # Get info about user_otadata partition
     partition_table_get_partition_info(otadata_offset "--partition-type data --partition-subtype user_ota" "offset")
