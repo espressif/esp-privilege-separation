@@ -107,7 +107,7 @@ from user application:
 system call table. This macro is generated from a script and is placed
 in ``syscall_def.h`` file, created during build process.
 
-``EXECUTE_SYSCALL`` is a macro defined in :component_file:`syscall_macros.h <../components/user/syscall_wrapper/include/syscall_macros.h>` file.
+``EXECUTE_SYSCALL`` is a macro defined in :component_file:`syscall_macros.h <../components/user/syscall_wrapper/include/riscv/syscall_macros.h>` file.
 
 All such wrapper functions for default system calls are defined in
 :component_file:`syscall_wrappers.c <../components/user/syscall_wrapper/syscall_wrappers.c>`.

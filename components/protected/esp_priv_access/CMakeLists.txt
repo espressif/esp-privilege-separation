@@ -1,3 +1,5 @@
+idf_build_get_property(target IDF_TARGET)
+
 if(USER_APP_BUILD)
     set(srcs)
 else()
@@ -38,6 +40,7 @@ endif()
 idf_component_get_property(bootloader_support_dir bootloader_support COMPONENT_DIR)
 
 set(includes "include"
+             "include/${target}"
              "${bootloader_support_dir}/include_bootloader")
 
 idf_component_register(SRCS ${srcs}

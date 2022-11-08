@@ -1,14 +1,16 @@
 set(srcs
    "src/esp_syscalls.c"
-   "src/syscall_handler.S"
    "src/esp_map.c"
    "src/esp_syscall_table.c")
+
+if(CONFIG_IDF_TARGET_ARCH_RISCV)
+    list(APPEND srcs "src/riscv/syscall_handler.S")
+endif()
 
 set(includes
     "${CMAKE_CURRENT_BINARY_DIR}"
     "include"
     )
-
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}

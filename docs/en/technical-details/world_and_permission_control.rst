@@ -56,7 +56,7 @@ When CPU tries to execute the configured address, it will transparently switch a
        }
 
 
-You can find the implementation in :component_file:`wcntl_ll.h <../components/protected/esp_priv_access/include/wcntl_ll.h>`.
+You can find the implementation in :component_file:`wcntl_ll.h <../components/protected/esp_priv_access/include/esp32c3/wcntl_ll.h>`.
 
 
 - Switching from Non-secure to Secure World:

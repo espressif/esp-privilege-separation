@@ -51,7 +51,7 @@
 #if CONFIG_IDF_TARGET_ARCH_RISCV
 #include "riscv/interrupt.h"
 #include "riscv/rvruntime-frames.h"
-#include "ecall_context.h"
+#include "riscv/ecall_context.h"
 #endif
 
 #include <driver/uart.h>
