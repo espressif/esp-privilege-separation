@@ -988,7 +988,7 @@ int usr_printf(const char *fmt, ...)
 {
     int ret = 0;
     char *str_ptr = NULL;
-    va_list ap = 0;
+    va_list ap;
     va_start(ap, fmt);
     if (_is_heap_initialized) {
         ret = vasprintf(&str_ptr, fmt, ap);
@@ -1010,7 +1010,7 @@ int usr_ets_printf(const char *fmt, ...)
 {
     int ret = 0;
     char *str_ptr = NULL;
-    va_list ap = 0;
+    va_list ap;
     va_start(ap, fmt);
     if (_is_heap_initialized) {
         ret = vasprintf(&str_ptr, fmt, ap);
