@@ -158,11 +158,11 @@ static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
  */
 static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     wcntl_ll_set_mtvec_base((uint32_t)&_vector_table);
 
     wcntl_ll_set_entry_check(0xFFFFFFFF);
 
-#if CONFIG_IDF_TARGET_ESP32C3
     intr_handler_set(RV_INT_NUM, esp_priv_access_violation_intr_func, NULL);
 
     intr_func = fn;
@@ -172,6 +172,17 @@ static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
     esprv_intc_int_set_type(BIT(RV_INT_NUM), INTR_TYPE_LEVEL);
     esprv_intc_int_set_priority(RV_INT_NUM, 3);
 #elif CONFIG_IDF_TARGET_ESP32S3
+    /* We use two separate vector tables for WORLD0 and WORLD1,
+     * this allows us to handle Windowed exceptions in WORLD1 itself, thus saving CPU cycles.
+     * For other vectors, we jump to WORLD0 vector table from WORLD1 vector table
+     *
+     * The vector table for WORLD1 is placed right at the start of WORLD1 IRAM
+     */
+    wcntl_ll_set_vecbase(WCNTL_WORLD_0, (uint32_t)&_vector_table);
+    wcntl_ll_set_vecbase(WCNTL_WORLD_1, (uint32_t)&_reserve_w1_iram_start);
+
+    xt_set_interrupt_handler(RV_INT_NUM, esp_priv_access_violation_intr_func, NULL);
+    intr_func = fn;
     xt_ints_on(BIT(RV_INT_NUM));
 #endif
 

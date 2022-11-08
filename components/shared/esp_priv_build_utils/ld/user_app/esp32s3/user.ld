@@ -33,6 +33,30 @@ SECTIONS
     _user_text_start = ABSOLUTE(.);
     _invalid_pc_placeholder = ABSOLUTE(.);
     _reserve_w1_iram_start = ABSOLUTE(.);
+    /* Vectors go to IRAM */
+    _vector_table = ABSOLUTE(.);
+    . = 0x0;
+    KEEP(*(.WindowVectors.text));
+    . = 0x180;
+    KEEP(*(.Level2InterruptVector.text));
+    . = 0x1c0;
+    KEEP(*(.Level3InterruptVector.text));
+    . = 0x200;
+    KEEP(*(.Level4InterruptVector.text));
+    . = 0x240;
+    KEEP(*(.Level5InterruptVector.text));
+    . = 0x280;
+    KEEP(*(.DebugExceptionVector.text));
+    . = 0x2c0;
+    KEEP(*(.NMIExceptionVector.text));
+    . = 0x300;
+    KEEP(*(.KernelExceptionVector.text));
+    . = 0x340;
+    KEEP(*(.UserExceptionVector.text));
+    . = 0x3C0;
+    KEEP(*(.DoubleExceptionVector.text));
+    . = 0x400;
+    *(.*Vector.literal)
     *(.init.literal)
     *(.init)
     *( .uiram  .uiram.*)
