@@ -23,7 +23,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "riscv/interrupt.h"
 #include "soc/world_controller_reg.h"
 #include "soc/sensitive_reg.h"
 #include "soc/extmem_reg.h"
@@ -34,13 +33,22 @@
 #include "wcntl_ll.h"
 #include "soc/periph_defs.h"
 #include "hal/memprot_ll.h"
+
+#if CONFIG_IDF_TARGET_ESP32C3
 #if defined(IDF_VERSION_V4_3)
 #include "esp32c3/memprot.h"
 #elif defined(IDF_VERSION_V4_4)
 #include "esp_memprot.h"
 #endif
+#include "riscv/interrupt.h"
 #include "esp32c3/rom/cache.h"
 #include "esp32c3/rom/rom_layout.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/cache.h"
+#include "esp32s3/rom/rom_layout.h"
+#include "esp_memprot.h"
+#endif
+
 #include "esp_heap_caps_init.h"
 
 #ifdef CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT
@@ -51,7 +59,12 @@
 
 #define USER_BOOT_TASK_PRIO             10
 
+#if CONFIG_IDF_TARGET_ESP32C3
 #define RV_INT_NUM      2
+#elif CONFIG_IDF_TARGET_ESP32S3
+// As per soc.h, interrupt number 18 is free to use and generates level 1 interrupt
+#define RV_INT_NUM      18
+#endif
 
 #define PA_INTR_ATTR IRAM_ATTR __attribute__((noinline))
 
@@ -80,39 +93,49 @@ static esp_priv_access_intr_handler_t intr_func;
 static usr_custom_app_desc_t app_desc;
 
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_dram_start, (int)&_reserve_w1_dram_end, world1_dram);
+#if CONFIG_IDF_TARGET_ESP32C3
 SOC_RESERVE_MEMORY_REGION((int)&_reserve_w1_iram_start, (int)&_reserve_w1_iram_end, world1_iram);
+#endif
 
 /* Enable IRAM permission violation interrupt */
 static void esp_priv_access_iram_int_en(uint8_t int_num)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_iram_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_iram_get_int_source_num(), int_num);
+#endif
 }
 
 /* Enable DRAM permission violation interrupt */
 static void esp_priv_access_dram_int_en(uint8_t int_num)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_dram_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_dram_get_int_source_num(), int_num);
+#endif
 }
 
 /* Enable Flash cache permission violation interrupt */
 static void esp_priv_access_flash_cache_int_en(uint8_t int_num)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_flash_icache_enable_int();
     permc_ll_flash_dcache_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_flash_cache_get_int_source_num(), int_num);
+#endif
 }
 
 /* Enable PIF bus permission violation interrupt */
 static void esp_priv_access_pif_int_en(uint8_t int_num)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_pif_enable_int();
 
     intr_matrix_set(PRO_CPU_NUM, permc_ll_pif_get_int_source_num(), int_num);
+#endif
 }
 
 /* Wrapper permission violation interrupt handler.
@@ -125,7 +148,9 @@ static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
         intr_func(args);
     }
 
+#if CONFIG_IDF_TARGET_ESP32C3
     esp_priv_access_handle_crashed_task();
+#endif
 }
 
 /* Configure top level permission violation interrupt,
@@ -137,6 +162,7 @@ static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
 
     wcntl_ll_set_entry_check(0xFFFFFFFF);
 
+#if CONFIG_IDF_TARGET_ESP32C3
     intr_handler_set(RV_INT_NUM, esp_priv_access_violation_intr_func, NULL);
 
     intr_func = fn;
@@ -145,6 +171,9 @@ static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
     esprv_intc_int_enable(BIT(RV_INT_NUM));
     esprv_intc_int_set_type(BIT(RV_INT_NUM), INTR_TYPE_LEVEL);
     esprv_intc_int_set_priority(RV_INT_NUM, 3);
+#elif CONFIG_IDF_TARGET_ESP32S3
+    xt_ints_on(BIT(RV_INT_NUM));
+#endif
 
     esp_priv_access_iram_int_en(RV_INT_NUM);
     esp_priv_access_dram_int_en(RV_INT_NUM);
@@ -157,13 +186,16 @@ static esp_err_t esp_priv_access_int_init(esp_priv_access_intr_handler_t fn)
 /* Configure IROM permissions */
 static void esp_priv_access_irom_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_irom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_irom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
+#endif
 }
 
 /* Configure IRAM permissions */
 static void esp_priv_access_iram_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_icache_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_icache_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
 
@@ -182,18 +214,22 @@ static void esp_priv_access_iram_config()
     /* PMS_3 corresponds to region after the main split line, i.e entire DRAM */
     permc_ll_iram_set_perm(PERMC_AREA_3, PERMC_WORLD_0, PERMC_ACCESS_NONE);
     permc_ll_iram_set_perm(PERMC_AREA_3, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+#endif
 }
 
 /* Configure DROM permissions */
 static void esp_priv_access_drom_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_drom_set_perm(PERMC_WORLD_0, PERMC_ACCESS_ALL);
     permc_ll_drom_set_perm(PERMC_WORLD_1, PERMC_ACCESS_NONE);
+#endif
 }
 
 /* Configure DRAM permissions */
 static void esp_priv_access_dram_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_dram_set_split_line(PERMC_SPLIT_LINE_0, (intptr_t)&_reserve_w1_dram_start);
 
     /* Split line to protect DRAM area reserved for ROM functions.
@@ -214,11 +250,13 @@ static void esp_priv_access_dram_config()
     /* PMS_0 corresponds to region before the main split line, i.e entire IRAM */
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_0, PERMC_ACCESS_NONE);
     permc_ll_dram_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+#endif
 }
 
 /* Configure RTC permissions */
 static void esp_priv_access_rtc_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     permc_ll_rtc_set_split_line(PERMC_WORLD_0, SOC_RTC_IRAM_LOW);
     permc_ll_rtc_set_split_line(PERMC_WORLD_1, SOC_RTC_IRAM_LOW);
 
@@ -228,11 +266,13 @@ static void esp_priv_access_rtc_config()
     // No RTC access to WORLD1
     permc_ll_rtc_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
     permc_ll_rtc_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_NONE);
+#endif
 }
 
 /* Configure Flash cache permissions */
 static IRAM_ATTR void esp_priv_access_flash_icache_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     /* Invalidate Cache */
     Cache_Invalidate_ICache_All();
 
@@ -247,11 +287,12 @@ static IRAM_ATTR void esp_priv_access_flash_icache_config()
 
     permc_ll_flash_icache_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
     permc_ll_flash_icache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
-
+#endif
 }
 
 static IRAM_ATTR void esp_priv_access_flash_dcache_config()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     /* Configure Dcache */
     permc_ll_flash_dcache_set_split_line(PERMC_SPLIT_LINE_0, 0x3C000000);
     permc_ll_flash_dcache_set_split_line(PERMC_SPLIT_LINE_1, 0x3C400000);
@@ -263,12 +304,13 @@ static IRAM_ATTR void esp_priv_access_flash_dcache_config()
 
     permc_ll_flash_dcache_set_perm(PERMC_AREA_0, PERMC_WORLD_1, PERMC_ACCESS_NONE);
     permc_ll_flash_dcache_set_perm(PERMC_AREA_1, PERMC_WORLD_1, PERMC_ACCESS_ALL);
-
+#endif
 }
 
 /* Revoke access to all the peripherals for WORLD1 */
 static void esp_priv_access_revoke_world1_peripheral_permissions(void)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     esp_priv_access_set_periph_perm(PA_UART1, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_I2C, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_MISC, PA_WORLD_1, PA_PERM_NONE);
@@ -312,6 +354,7 @@ static void esp_priv_access_revoke_world1_peripheral_permissions(void)
     esp_priv_access_set_periph_perm(PA_CRYPTO_DMA, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_CRYPTO_PERI, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_USB_WRAP, PA_WORLD_1, PA_PERM_NONE);
+#endif
 }
 
 esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)

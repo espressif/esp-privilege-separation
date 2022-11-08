@@ -52,6 +52,8 @@
 #include "riscv/interrupt.h"
 #include "riscv/rvruntime-frames.h"
 #include "riscv/ecall_context.h"
+#elif CONFIG_IDF_TARGET_ARCH_XTENSA
+#include "xtensa/syscall_context.h"
 #endif
 
 #include <driver/uart.h>
@@ -412,7 +414,8 @@ void vPortCleanUpTCB (void *pxTCB)
          */
 #if CONFIG_IDF_TARGET_ARCH_XTENSA
         XtSyscallExcFrame *syscall_stack = (XtSyscallExcFrame *)((uint32_t)pxTaskGetStackStart(pxTCB) + KERNEL_STACK_SIZE - XT_ISTK_FRMSZ);
-        free((void *)syscall_stack->user_stack);
+        usr_ptr = (void *)syscall_stack->user_stack;
+        free(curr_stack);
 #elif CONFIG_IDF_TARGET_ARCH_RISCV
         RvEcallFrame *syscall_stack = (RvEcallFrame *)((uint32_t)pxTaskGetStackStart(pxTCB) + KERNEL_STACK_SIZE - RV_ESTK_FRMSZ);
         usr_ptr = (void *)syscall_stack->stack;
@@ -550,6 +553,7 @@ void sys_vPortYield(void)
     vPortYield();
 }
 
+#if CONFIG_IDF_TARGET_ARCH_RISCV
 void sys_vPortEnterCritical(void)
 {
     vPortEnterCritical();
@@ -559,15 +563,50 @@ void sys_vPortExitCritical(void)
 {
     vPortExitCritical();
 }
+#elif CONFIG_IDF_TARGET_ARCH_XTENSA
+void sys_vPortEnterCritical(portMUX_TYPE *mux)
+{
+    vPortEnterCritical(mux);
+}
+
+void sys_vPortExitCritical(portMUX_TYPE *mux)
+{
+    vPortExitCritical(mux);
+}
+#endif
+
+int sys_xPortEnterCriticalTimeout(spinlock_t *mux, int timeout)
+{
+#if CONFIG_IDF_TARGET_ESP32S3
+    return xPortEnterCriticalTimeout(mux, timeout);
+#else
+    return -1;
+#endif
+}
+
+int sys_xPortInterruptedFromISRContext(void)
+{
+#if CONFIG_IDF_TARGET_ESP32S3
+    return xPortInterruptedFromISRContext();
+#else
+    return -1;
+#endif
+}
 
 int sys_vPortSetInterruptMask(void)
 {
+#if CONFIG_IDF_TARGET_ARCH_RISCV
     return vPortSetInterruptMask();
+#else
+    return 0;
+#endif
 }
 
 void sys_vPortClearInterruptMask(int mask)
 {
+#if CONFIG_IDF_TARGET_ARCH_RISCV
     vPortClearInterruptMask(mask);
+#endif
 }
 
 void sys_vTaskSuspendAll(void)
@@ -716,8 +755,13 @@ UBaseType_t sys_uxTaskGetStackHighWaterMark(TaskHandle_t xTask)
         /* High watermark can be queried for a task executing system-call, in that case, the stack will point to kernel stack.
          * Retrieve the user stack from system call stack frame
          */
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+        XtSyscallExcFrame *syscall_stack = (XtSyscallExcFrame *)((uint32_t)stackstart + KERNEL_STACK_SIZE - XT_ISTK_FRMSZ);
+        stackstart = (const uint8_t *)syscall_stack->user_stack;
+#elif CONFIG_IDF_TARGET_ARCH_RISCV
         RvEcallFrame *syscall_stack = (RvEcallFrame *)((uint32_t)stackstart + KERNEL_STACK_SIZE - RV_ESTK_FRMSZ);
         stackstart = (const uint8_t *)syscall_stack->stack;
+#endif
     }
 
     while (*stackstart == (uint8_t)tskSTACK_FILL_BYTE) {

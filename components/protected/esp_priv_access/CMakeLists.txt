@@ -5,9 +5,12 @@ if(USER_APP_BUILD)
 else()
     set(srcs "esp_priv_access_image_utility.c"
              "esp_priv_access_setup.c"
-             "esp_priv_access_panic.c"
              "esp_priv_access_ota_utils.c")
     set(cacert)
+endif()
+
+if(CONFIG_IDF_TARGET_ESP32C3)
+    list(APPEND srcs "esp_priv_access_panic.c")
 endif()
 
 if(CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT)

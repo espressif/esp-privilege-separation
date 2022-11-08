@@ -46,5 +46,8 @@ set_source_files_properties(
     -fno-stack-protector)
 
 elseif((${IDF_VERSION_MAJOR} EQUAL 4) AND (${IDF_VERSION_MINOR} EQUAL 4))
+    if(NOT "${target}" STREQUAL "esp32c3")
+        return()
+    endif()
     include(${idf_path}/components/esp32c3/CMakeLists.txt)
 endif()

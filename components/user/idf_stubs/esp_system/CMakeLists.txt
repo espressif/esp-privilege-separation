@@ -45,4 +45,8 @@ idf_component_register(SRCS ${srcs}
                        PRIV_REQUIRES ${priv_requires}
                        LDFRAGMENTS ${ld_fragments})
 
-add_subdirectory(${esp_system_dir}/port ${CMAKE_CURRENT_BINARY_DIR}/port)
+#add_subdirectory(${esp_system_dir}/port ${CMAKE_CURRENT_BINARY_DIR}/port)
+target_include_directories(${COMPONENT_LIB} PRIVATE ${esp_system_dir}/port/include)
+target_include_directories(${COMPONENT_LIB} PUBLIC ${esp_system_dir}/port/public_compat)
+
+target_include_directories(${COMPONENT_LIB} PUBLIC public_compat)

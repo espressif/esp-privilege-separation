@@ -4,6 +4,8 @@ set(includes "include")
 
 if(CONFIG_IDF_TARGET_ARCH_RISCV)
     list(APPEND includes "include/riscv")
+elseif(CONFIG_IDF_TARGET_ARCH_XTENSA)
+    list(APPEND includes "include/xtensa")
 endif()
 
 

@@ -20,6 +20,7 @@
 #include "esp_log.h"
 #include "esp_fault.h"
 
+#if CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/cache.h"
 #include "esp32c3/rom/efuse.h"
 #include "esp32c3/rom/ets_sys.h"
@@ -29,6 +30,17 @@
 #include "esp32c3/rom/uart.h"
 #include "esp32c3/rom/gpio.h"
 #include "esp32c3/rom/secure_boot.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/cache.h"
+#include "esp32s3/rom/efuse.h"
+#include "esp32s3/rom/ets_sys.h"
+#include "esp32s3/rom/spi_flash.h"
+#include "esp32s3/rom/crc.h"
+#include "esp32s3/rom/rtc.h"
+#include "esp32s3/rom/uart.h"
+#include "esp32s3/rom/gpio.h"
+#include "esp32s3/rom/secure_boot.h"
+#endif
 #include "soc/world_controller_reg.h"
 #include "soc/sensitive_reg.h"
 #include "soc/extmem_reg.h"
@@ -59,13 +71,27 @@ static inline uint32_t user_cache_pages_to_map(uint32_t size, uint32_t vaddr)
 
 static IRAM_ATTR uint32_t kernel_cache_disable()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     uint32_t icache_state = Cache_Suspend_ICache() << 16;
     return icache_state;
+#elif CONFIG_IDF_TARGET_ESP32S3
+    uint32_t dcache_state = Cache_Suspend_DCache();
+    Cache_Invalidate_DCache_All();
+    return dcache_state;
+#endif
 }
 
 static IRAM_ATTR void kernel_cache_restore(uint32_t cache_state)
 {
+#if CONFIG_IDF_TARGET_ESP32C3
     Cache_Resume_ICache(cache_state >> 16);
+#elif CONFIG_IDF_TARGET_ESP32S3
+    REG_CLR_BIT(EXTMEM_DCACHE_CTRL1_REG, EXTMEM_DCACHE_SHUT_CORE0_BUS);
+#if !CONFIG_FREERTOS_UNICORE
+    REG_CLR_BIT(EXTMEM_DCACHE_CTRL1_REG, EXTMEM_DCACHE_SHUT_CORE1_BUS);
+#endif
+    Cache_Resume_DCache(cache_state);
+#endif
 }
 
 /*

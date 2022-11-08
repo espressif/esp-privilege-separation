@@ -80,6 +80,7 @@ static QueueHandle_t usr_mem_cleanup_queue;
 
 static bool _is_heap_initialized;
 
+#if CONFIG_IDF_TARGET_ESP32C3
 /* Define all memory regions as default DRAM memory region.
  * Block 9 is defined as DRAM used for startup stack in IDF but in case of user app,
  * we use pre-reserved memory as startup stack
@@ -105,6 +106,51 @@ const soc_memory_region_t soc_memory_regions[] = {
 };
 
 const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
+
+#elif CONFIG_IDF_TARGET_ESP32S3
+
+/* A split line is added at ROM_DRAM_RESERVE_START to protect
+ * reserved ROM region. As split line can only be added at 256
+ * byte aligned address, we have used ALIGN_DOWN macro here.
+ */
+#define ROM_DRAM_RESERVE_START          ALIGN_DOWN(0x3FCEEE34, 256)
+
+const ets_rom_layout_t layout =  {.dram0_rtos_reserved_start = (void *)ROM_DRAM_RESERVE_START};
+
+const ets_rom_layout_t * const ets_rom_layout_p = &layout;
+
+const soc_memory_region_t soc_memory_regions[] = {
+/*
+#ifdef CONFIG_SPIRAM
+    { SOC_EXTRAM_DATA_LOW, SOC_EXTRAM_DATA_SIZE, 4, 0}, //SPI SRAM, if available
+#endif
+#if CONFIG_ESP32S3_INSTRUCTION_CACHE_16KB
+    { 0x40374000, 0x4000,  3, 0},          //Level 1, IRAM
+#endif
+*/
+    { 0x3FC88000, 0x8000,  2, 0x40378000}, //Level 2, IDRAM, can be used as trace memroy
+    { 0x3FC90000, 0x10000, 2, 0x40380000}, //Level 3, IDRAM, can be used as trace memroy
+    { 0x3FCA0000, 0x10000, 2, 0x40390000}, //Level 4, IDRAM, can be used as trace memroy
+    { 0x3FCB0000, 0x10000, 2, 0x403A0000}, //Level 5, IDRAM, can be used as trace memroy
+    { 0x3FCC0000, 0x10000, 2, 0x403B0000}, //Level 6, IDRAM, can be used as trace memroy
+    { 0x3FCD0000, 0x10000, 2, 0x403C0000}, //Level 7, IDRAM, can be used as trace memroy
+    { 0x3FCE0000, 0x10000, 2, 0},          //Level 8, IDRAM, can be used as trace memroy, contains stacks used by startup flow, recycled by heap allocator in app_main task
+/*
+#if CONFIG_ESP32S3_DATA_CACHE_16KB || CONFIG_ESP32S3_DATA_CACHE_32KB
+    { 0x3FCF0000, 0x8000,  0, 0},          //Level 9, DRAM
+#endif
+#if CONFIG_ESP32S3_DATA_CACHE_16KB
+    { 0x3C000000, 0x4000,  5, 0}
+#endif
+#ifdef CONFIG_ESP_SYSTEM_ALLOW_RTC_FAST_MEM_AS_HEAP
+    { 0x600fe000, 0x2000,  6, 0}, //Fast RTC memory
+#endif
+*/
+};
+
+const size_t soc_memory_region_count = sizeof(soc_memory_regions) / sizeof(soc_memory_region_t);
+
+#endif
 
 void usr_vPortCPUInitializeMutex(portMUX_TYPE *mux)
 {

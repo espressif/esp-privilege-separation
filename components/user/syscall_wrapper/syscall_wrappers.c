@@ -268,6 +268,7 @@ void usr_vPortYield(void)
     EXECUTE_SYSCALL(__NR_vPortYield);
 }
 
+#if CONFIG_IDF_TARGET_ARCH_RISCV
 void usr_vPortEnterCritical(void)
 {
     EXECUTE_SYSCALL(__NR_vPortEnterCritical);
@@ -276,6 +277,38 @@ void usr_vPortEnterCritical(void)
 void usr_vPortExitCritical(void)
 {
     EXECUTE_SYSCALL(__NR_vPortExitCritical);
+}
+
+#elif CONFIG_IDF_TARGET_ARCH_XTENSA
+
+void usr_vPortEnterCritical(portMUX_TYPE *mux)
+{
+    EXECUTE_SYSCALL(mux, __NR_vPortEnterCritical);
+}
+
+void usr_vPortExitCritical(portMUX_TYPE *mux)
+{
+    EXECUTE_SYSCALL(mux, __NR_vPortExitCritical);
+}
+
+#endif
+
+int usr_xPortEnterCriticalTimeout(spinlock_t *mux, int timeout)
+{
+#if CONFIG_IDF_TARGET_ESP32S3
+    return EXECUTE_SYSCALL(mux, timeout, __NR_xPortEnterCriticalTimeout);
+#else
+    return -1;
+#endif
+}
+
+int usr_xPortInterruptedFromISRContext(void)
+{
+#if CONFIG_IDF_TARGET_ESP32S3
+    return EXECUTE_SYSCALL(__NR_xPortInterruptedFromISRContext);
+#else
+    return -1;
+#endif
 }
 
 int usr_vPortSetInterruptMask(void)
@@ -1027,3 +1060,4 @@ int usr_ets_printf(const char *fmt, ...)
     }
     return ret;
 }
+

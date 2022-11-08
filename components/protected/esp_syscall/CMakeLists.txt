@@ -3,8 +3,18 @@ set(srcs
    "src/esp_map.c"
    "src/esp_syscall_table.c")
 
+set(private_include_dirs)
+
 if(CONFIG_IDF_TARGET_ARCH_RISCV)
     list(APPEND srcs "src/riscv/syscall_handler.S")
+elseif(CONFIG_IDF_TARGET_ARCH_XTENSA)
+    idf_component_get_property(freertos_dir freertos COMPONENT_DIR)
+    list(APPEND srcs "src/xtensa/syscall_handler.S")
+
+    list(APPEND private_include_dirs
+        ${freertos_dir}/port/xtensa/include/freertos
+        ${freertos_dir}/port/xtensa
+        ${freertos_dir}/port/priv_include)
 endif()
 
 set(includes
@@ -14,7 +24,12 @@ set(includes
 
 idf_component_register(SRCS ${srcs}
                     INCLUDE_DIRS ${includes}
+                    PRIV_INCLUDE_DIRS  ${private_include_dirs}
                     PRIV_REQUIRES esp_wifi nvs_flash esp_priv_access esp_priv_build_utils syscall_shared driver esp_user_ota)
+
+if(CONFIG_IDF_TARGET_ARCH_XTENSA)
+    target_link_libraries(${COMPONENT_TARGET} "-u force_linker_to_include")
+endif()
 
 set(syscallhdr_sh
     ${COMPONENT_DIR}/syscall/syscallhdr.sh ${CMAKE_CURRENT_BINARY_DIR}/syscall.tbl
