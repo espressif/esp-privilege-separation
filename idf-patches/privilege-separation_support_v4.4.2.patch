@@ -54,14 +54,14 @@ index 07dd0a32be..1326a660dd 100644
 +
  endmenu  # ESP32S3-Specific
 diff --git a/components/esp_system/Kconfig b/components/esp_system/Kconfig
-index 5cdab58bf0..532da4c60d 100644
+index 5cdab58bf0..a1a72498d8 100644
 --- a/components/esp_system/Kconfig
 +++ b/components/esp_system/Kconfig
 @@ -113,6 +113,7 @@ menu "ESP System Settings"
              bool
              default y if IDF_TARGET_ESP32S2
              default y if IDF_TARGET_ESP32C3
-+            default y if IDF_TARGET_ESP32S3
++            default y if IDF_TARGET_ESP32S3 && ESP_PRIVILEGE_SEPARATION_ENABLE
              default y if IDF_TARGET_ESP32H2
  
          config ESP_SYSTEM_MEMPROT_FEATURE
@@ -255,7 +255,7 @@ index 5e80268da7..63448cd7d4 100644
 +add_custom_target(memory_ld DEPENDS ${ld_output} ${sections_output})
  add_dependencies(${COMPONENT_LIB} memory_ld)
 diff --git a/components/freertos/port/xtensa/portasm.S b/components/freertos/port/xtensa/portasm.S
-index 0fbbdb8d51..7b431ecee1 100644
+index 0fbbdb8d51..eb8fb199dd 100644
 --- a/components/freertos/port/xtensa/portasm.S
 +++ b/components/freertos/port/xtensa/portasm.S
 @@ -25,10 +25,23 @@
@@ -282,10 +282,11 @@ index 0fbbdb8d51..7b431ecee1 100644
  .extern pxCurrentTCB
  
  /*
-@@ -111,12 +124,29 @@ _frxt_int_enter:
+@@ -111,6 +124,26 @@ _frxt_int_enter:
      /* Save the rest of the interrupted context (preserves A12-13). */
      call0   _xt_context_save
  
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    /* Save WORLD in Thread Local Storage */
 +    movi    a2, WORLD_CONTROLLER_WCL_CORE_0_STATUSTABLE1_REG
 +    l32i    a3, a2, 0
@@ -303,20 +304,16 @@ index 0fbbdb8d51..7b431ecee1 100644
 +    l32i    a3,  a3, 0
 +    s32i    a2,  a3, WORLD_OFFSET
 +    memw
++#endif
 +
      /*
      Save interrupted task's SP in TCB only if not nesting.
      Manage nesting directly rather than call the generic IntEnter()
-     (in windowed ABI we can't call a C function here anyway because PS.EXCM is still set).
-     */
--	getcoreid a4
-     movi    a2,  port_xSchedulerRunning
- 	addx4	a2,  a4, a2
-     movi    a3,  port_interruptNesting
-@@ -244,6 +274,32 @@ _frxt_int_exit:
+@@ -244,6 +277,34 @@ _frxt_int_exit:
      In either case there's no need to load the SP.
      */
  
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    /* Restore WORLD from the TLS */
 +    getcoreid a4
 +    movi    a2,  pxCurrentTCB
@@ -342,14 +339,16 @@ index 0fbbdb8d51..7b431ecee1 100644
 +
 +.skip_restore_world:
 +    memw
++#endif
 +
      /* Restore full context from interrupt stack frame */
      call0   _xt_context_restore
  
-@@ -442,6 +498,28 @@ _frxt_dispatch:
+@@ -442,6 +503,30 @@ _frxt_dispatch:
      l32i    sp,  a3, TOPOFSTACK_OFFS     /* SP = next_TCB->pxTopOfStack;  */
      s32i    a3,  a2, 0
  
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    /* Restore WORLD from the TLS */
 +    l32i    a4,  a3, WORLD_OFFSET
 +    beqz    a4,  1f
@@ -371,14 +370,16 @@ index 0fbbdb8d51..7b431ecee1 100644
 +
 +1:
 +    memw
++#endif
 +
      /* Determine the type of stack frame. */
      l32i    a2,  sp, XT_STK_EXIT        /* exit dispatcher or solicited flag */
      bnez    a2,  .L_frxt_dispatch_stk
-@@ -571,10 +649,22 @@ vPortYield:
+@@ -571,10 +656,29 @@ vPortYield:
      call0   _xt_coproc_savecs
      #endif
  
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    /* vPortYield does not raise an interrupt before switching context,
 +     * so we read the debug register to know the current WORLD
 +     */
@@ -388,12 +389,18 @@ index 0fbbdb8d51..7b431ecee1 100644
 +    movi    a4, 2
 +    and     a4, a3, a4
 +
++    movi    a2,  pxCurrentTCB
++    getcoreid a3
++    addx4	a2,  a3, a2
++    l32i    a2,  a2, 0                  /* a2 = pxCurrentTCB                */
++    /* Store the WORLD */
++    s32i    a4,  a2, WORLD_OFFSET
++#else
      movi    a2,  pxCurrentTCB
  	getcoreid a3
  	addx4	a2,  a3, a2
      l32i    a2,  a2, 0                  /* a2 = pxCurrentTCB                */
-+    /* Store the WORLD */
-+    s32i    a4,  a2, WORLD_OFFSET
++#endif
 +
      movi    a3,  0
      s32i    a3,  sp, XT_SOL_EXIT        /* 0 to flag as solicited frame     */
@@ -473,10 +480,96 @@ index 791116cfbc..4a0e466da4 100644
 +    rsr     a0, EXCSAVE_1
 +    rfe
 diff --git a/components/freertos/port/xtensa/xtensa_vectors.S b/components/freertos/port/xtensa/xtensa_vectors.S
-index 1560ff27d6..01b639e87f 100644
+index 1560ff27d6..683247341b 100644
 --- a/components/freertos/port/xtensa/xtensa_vectors.S
 +++ b/components/freertos/port/xtensa/xtensa_vectors.S
-@@ -738,77 +738,6 @@ _xt_user_exit:
+@@ -94,6 +94,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ #include "esp_private/panic_reason.h"
+ #include "sdkconfig.h"
+ #include "soc/soc.h"
++#include "soc/sensitive_reg.h"
++#include "soc/extmem_reg.h"
+ 
+ /*
+   Define for workaround: pin no-cpu-affinity tasks to a cpu when fpu is used.
+@@ -571,6 +573,14 @@ _call_alignment_handler:
+     j       .LS_exit
+ #endif
+ 
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    .align      4
++_xt_perm_violation:
++    movi    a0, EXCCAUSE_LEVEL1INTERRUPT
++    wsr     a0, EXCCAUSE
++    j       _xt_lowint1
++#endif
++
+ /*
+ --------------------------------------------------------------------------------
+   User exception handler.
+@@ -581,7 +591,27 @@ _call_alignment_handler:
+     .align      4
+ 
+ _xt_user_exc:
+-
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    wsr     a2, DEPC
++    movi    a0, 0x50000000
++    movi    a2, 0
++    s32i    a2, a0, 0
++    addi    a2, a2, 1
++    s32i    a2, a0, 0
++    addi    a2, a2, 1
++    s32i    a2, a0, 0
++    addi    a2, a2, 1
++    s32i    a2, a0, 0
++    addi    a2, a2, 1
++    s32i    a2, a0, 0
++    addi    a2, a2, 1
++    s32i    a2, a0, 0
++    addi    a2, a2, 1
++    s32i    a2, a0, 0
++    l32i    a0, a0, 0
++    memw
++    rsr     a2, DEPC
++#endif
+     /* If level 1 interrupt then jump to the dispatcher */
+     rsr     a0, EXCCAUSE
+     beqi    a0, EXCCAUSE_LEVEL1INTERRUPT, _xt_lowint1
+@@ -608,6 +638,32 @@ _xt_user_exc:
+ .LS_exit:
+ #endif
+ 
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
++    /* Check for IRAM violation */
++    movi    a0, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_2_REG
++    l32i    a0, a0, 0
++    extui   a0, a0, 0, 1
++    beqi    a0, 1, _xt_perm_violation
++
++    /* Check for DRAM violation */
++    movi    a0, SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_2_REG
++    l32i    a0, a0, 0
++    extui   a0, a0, 0, 1
++    beqi    a0, 1, _xt_perm_violation
++
++    /* Check for IBUS Cache violation */
++    movi    a0, EXTMEM_CORE0_ACS_CACHE_INT_ST_REG
++    l32i    a0, a0, 0
++    extui   a0, a0, 0, 3
++    bgei    a0, 1, _xt_perm_violation
++
++    /* Check for DBUS Cache violation */
++    movi    a0, EXTMEM_CORE0_ACS_CACHE_INT_ST_REG
++    l32i    a0, a0, 0
++    extui   a0, a0, 2, 3
++    bgei    a0, 1, _xt_perm_violation
++#endif
++
+     /* Handle all other exceptions. All can have user-defined handlers. */
+     /* NOTE: we'll stay on the user stack for exception handling.       */
+ 
+@@ -738,77 +794,6 @@ _xt_user_exit:
      rfe                                     /* PS.EXCM is cleared */
  
  
@@ -555,7 +648,7 @@ index 1560ff27d6..01b639e87f 100644
  --------------------------------------------------------------------------------
  Co-Processor Exception Handler (jumped to from User Exception Handler).
 diff --git a/components/hal/esp32s3/include/hal/memprot_ll.h b/components/hal/esp32s3/include/hal/memprot_ll.h
-index 41410cc80f..3df4e1b918 100644
+index 41410cc80f..b2643df0b4 100644
 --- a/components/hal/esp32s3/include/hal/memprot_ll.h
 +++ b/components/hal/esp32s3/include/hal/memprot_ll.h
 @@ -1,655 +1,1630 @@
@@ -603,7 +696,7 @@ index 41410cc80f..3df4e1b918 100644
 -/**
 - * === IRAM0 ====
 - */
-+    //highest address of each Level slot in the SRAM's 3rd memory region (I/D access, 416kB)
++//highest address of each Level slot in the SRAM's 3rd memory region (I/D access, 416kB)
 +//quick resolver of split-address category bits
 +static const intptr_t sram_rg3_level_hlimits[] = {
 +        0x4037FFFF, //level 2 (32KB)
@@ -1285,7 +1378,7 @@ index 41410cc80f..3df4e1b918 100644
 +            return MEMP_LL_ERR_CORE_INVALID;
 +    }
 +
-+    *addr = (void*)(reg_off > 0 ? (reg_off << I_D_FAULT_ADDR_SHIFT) + IRAM0_ADDRESS_LOW : 0);
++    *addr = (void*)(reg_off > 0 ? (reg_off << I_FAULT_ADDR_SHIFT) + IRAM0_ADDRESS_LOW : 0);
 +
 +    return MEMP_LL_OK;
 +}
@@ -2575,7 +2668,7 @@ index 41410cc80f..3df4e1b918 100644
  
 -    //write configuration to DPORT_PMS_PRO_DRAM0_1_REG
 -    DPORT_WRITE_PERI_REG(DPORT_PMS_PRO_DRAM0_1_REG, reg_split_addr | permission_mask | uni_block_perm);
-+    *addr = (void*)(reg_off > 0 ? (reg_off << I_D_FAULT_ADDR_SHIFT) + IRAM0_ADDRESS_LOW : 0);
++    *addr = (void*)(reg_off > 0 ? (reg_off << D_FAULT_ADDR_SHIFT) + DRAM0_ADDRESS_LOW : 0);
 +
 +    return MEMP_LL_OK;
  }
@@ -2621,7 +2714,7 @@ index 41410cc80f..3df4e1b918 100644
  #ifdef __cplusplus
  }
 diff --git a/components/hal/include/hal/memprot_types.h b/components/hal/include/hal/memprot_types.h
-index 15e3c3959a..e76c0300e6 100644
+index 15e3c3959a..b335519058 100644
 --- a/components/hal/include/hal/memprot_types.h
 +++ b/components/hal/include/hal/memprot_types.h
 @@ -6,6 +6,9 @@
@@ -2634,11 +2727,13 @@ index 15e3c3959a..e76c0300e6 100644
  #ifdef __cplusplus
  extern "C" {
  #endif
-@@ -16,13 +19,14 @@ extern "C" {
+@@ -16,13 +19,19 @@ extern "C" {
   */
  typedef enum {
      MEMP_LL_OK = 0,
--    MEMP_LL_FAIL = 1,
++#ifndef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
+     MEMP_LL_FAIL = 1,
++#endif
      MEMP_LL_ERR_SPLIT_ADDR_OUT_OF_RANGE = 2,
      MEMP_LL_ERR_SPLIT_ADDR_INVALID = 2,         /* temporary duplicate for S2 builds */
      MEMP_LL_ERR_SPLIT_ADDR_UNALIGNED = 3,
@@ -2646,12 +2741,14 @@ index 15e3c3959a..e76c0300e6 100644
      MEMP_LL_ERR_AREA_INVALID = 5,
 -    MEMP_LL_ERR_WORLD_INVALID = 6
 +    MEMP_LL_ERR_WORLD_INVALID = 6,
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    MEMP_LL_ERR_CORE_INVALID = 7,
 +    MEMP_LL_FAIL = -1,
++#endif
  } memprot_ll_err_t;
  
  /**
-@@ -45,6 +49,19 @@ typedef enum {
+@@ -45,6 +54,19 @@ typedef enum {
      MEMP_LL_AREA_HIGH = 2
  } memprot_ll_area_t;
  
@@ -2672,16 +2769,18 @@ index 15e3c3959a..e76c0300e6 100644
  }
  #endif
 diff --git a/components/hal/interrupt_controller_hal.c b/components/hal/interrupt_controller_hal.c
-index f7e815beff..dd0c2640d2 100644
+index f7e815beff..5335d3003d 100644
 --- a/components/hal/interrupt_controller_hal.c
 +++ b/components/hal/interrupt_controller_hal.c
-@@ -22,7 +22,8 @@ static bool is_interrupt_number_reserved(int interrupt_number)
+@@ -22,7 +22,11 @@ static bool is_interrupt_number_reserved(int interrupt_number)
  {
      // Workaround to reserve interrupt number 1 for Wi-Fi, 5,8 for Bluetooth, 6 for "permanently disabled interrupt"
      // [TODO: IDF-2465]
--    const uint32_t reserved = BIT(1) | BIT(5) | BIT(6) | BIT(8);
++#ifdef CONFIG_ESP_PRIVILEGE_SEPARATION_ENABLE
 +    const uint32_t reserved = BIT(1) | BIT(2) | BIT(5) | BIT(6) | BIT(8);
-+    //const uint32_t reserved = BIT(1) | BIT(5) | BIT(6) | BIT(8);
++#else
+     const uint32_t reserved = BIT(1) | BIT(5) | BIT(6) | BIT(8);
++#endif
      if (reserved & BIT(interrupt_number)) {
          return true;
      }
@@ -3203,10 +3302,10 @@ index 0000000000..b26bbe8db9
 +#endif
 diff --git a/components/soc/esp32s3/include/soc/memprot_defs.h b/components/soc/esp32s3/include/soc/memprot_defs.h
 new file mode 100644
-index 0000000000..b9c705ad06
+index 0000000000..b500d42eaa
 --- /dev/null
 +++ b/components/soc/esp32s3/include/soc/memprot_defs.h
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,52 @@
 +/*
 + * SPDX-FileCopyrightText: 2020-2022 Espressif Systems (Shanghai) CO LTD
 + *
@@ -3239,7 +3338,8 @@ index 0000000000..b9c705ad06
 +#define I_D_SRAM_SEGMENT_SIZE       0x10000
 +#define I_D_SPLIT_LINE_ALIGN        0x100
 +#define I_D_SPLIT_LINE_SHIFT        0x8
-+#define I_D_FAULT_ADDR_SHIFT        0x2
++#define I_FAULT_ADDR_SHIFT          0x2
++#define D_FAULT_ADDR_SHIFT          0x4
 +
 +//IRAM0
 +#define SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_SRAM_WORLD_X_R  0x1
