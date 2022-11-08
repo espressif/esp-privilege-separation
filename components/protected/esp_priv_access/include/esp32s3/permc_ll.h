@@ -27,6 +27,12 @@
 extern "C" {
 #endif
 
+/*
+ * Only configured for core 0
+ * TODO: Add dual core support
+ *
+ */
+
 typedef enum {
     PERMC_WORLD_0 = 0,
     PERMC_WORLD_1,
@@ -36,6 +42,7 @@ typedef enum {
     PERMC_SPLIT_LINE_0 = 0,
     PERMC_SPLIT_LINE_1,
     PERMC_SPLIT_LINE_2,
+    PERMC_SPLIT_LINE_3,
 } permc_split_line_t;
 
 typedef enum {
@@ -44,7 +51,7 @@ typedef enum {
     PERMC_AREA_2,        /* Area between split_line 1 and END */
     PERMC_AREA_3,
     PERMC_AREA_INVALID,
-} permc_sram_area_t;
+} permc_area_t;
 
 typedef enum {
     PERMC_ACCESS_NONE = 0,
@@ -106,6 +113,11 @@ typedef enum {
     PERMC_MAX,
 } permc_pif_t;
 
+#define ICACHE_PMS_W0_BASE       12
+#define ICACHE_PMS_W1_BASE       12
+#define ICACHE_PMS_S             3
+#define ICACHE_PMS_V             7
+
 #define IRAM_PMS_W0_BASE       0
 #define IRAM_PMS_W1_BASE       0
 #define IRAM_PMS_S             3
@@ -121,7 +133,8 @@ typedef enum {
 #define RTC_PMS_S               3
 #define RTC_PMS_V               7
 
-#define FLASH_ICACHE_V          3
+#define FLASH_ICACHE_S          3
+#define FLASH_ICACHE_V          7
 #define FLASH_DCACHE_V          1
 
 #define PIF_PMS_MAX_REG_ENTRY   16
@@ -139,6 +152,7 @@ typedef enum {
 
 static inline void permc_ll_sram_set_split_line(intptr_t addr)
 {
+    memprot_ll_set_iram0_split_line_main_I_D((const void *)addr);
 }
 
 /*
@@ -146,60 +160,138 @@ static inline void permc_ll_sram_set_split_line(intptr_t addr)
  */
 static inline void permc_ll_irom_set_perm(permc_world_t world, permc_flags_t flags)
 {
+    switch (world) {
+        case PERMC_WORLD_0:
+            REG_SET_FIELD(SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_2_REG, SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_ROM_WORLD_0_PMS, flags);
+            break;
+        case PERMC_WORLD_1:
+            REG_SET_FIELD(SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_ROM_WORLD_1_PMS, flags);
+            break;
+        default:
+            assert(0);
+    }
 }
 
-static inline void permc_ll_icache_set_perm(permc_world_t world, permc_flags_t flags)
+static inline void permc_ll_icache_set_perm(permc_area_t area, permc_world_t world, permc_flags_t flags)
 {
+    /* Only 2 cache banks available */
+    assert(area < PERMC_AREA_2);
+
+    uint32_t reg;
+    uint32_t offset;
+
+    if (world == PERMC_WORLD_0) {
+        reg = SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_2_REG;
+        offset = ICACHE_PMS_W0_BASE;
+    } else {
+        reg = SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_1_REG;
+        offset = ICACHE_PMS_W1_BASE;
+    }
+
+    uint32_t shift = offset + (area * ICACHE_PMS_S);
+
+    uint32_t mask = ~(ICACHE_PMS_V << shift);
+
+    uint32_t val = flags & ICACHE_PMS_V;
+
+    REG_WRITE(reg, (REG_READ(reg) & mask) | (val << shift));
 }
 
 static inline void permc_ll_iram_set_split_line(permc_split_line_t line, intptr_t addr)
 {
+    switch (line) {
+        case PERMC_SPLIT_LINE_0:
+            memprot_ll_set_iram0_split_line_I_0((const void *)addr);
+            break;
+        case PERMC_SPLIT_LINE_1:
+            memprot_ll_set_iram0_split_line_I_1((const void *)addr);
+            break;
+        default:
+            assert(0);
+    }
 }
 
-static inline void permc_ll_iram_set_perm(permc_sram_area_t area, permc_world_t world, permc_flags_t flags)
+static inline void permc_ll_iram_set_perm(permc_area_t area, permc_world_t world, permc_flags_t flags)
 {
+    /* Only WORLD0 and WORLD1 are supported */
+    assert(world <= PERMC_WORLD_1);
+
+    assert(area < PERMC_AREA_INVALID);
+
+    uint32_t reg;
+    uint32_t offset;
+
+    if (world == PERMC_WORLD_0) {
+        reg = SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_2_REG;
+        offset = IRAM_PMS_W0_BASE;
+    } else {
+        reg = SENSITIVE_CORE_X_IRAM0_PMS_CONSTRAIN_1_REG;
+        offset = IRAM_PMS_W1_BASE;
+    }
+
+    uint32_t shift = offset + (area * IRAM_PMS_S);
+
+    uint32_t mask = ~(IRAM_PMS_V << shift);
+
+    uint32_t val = flags & IRAM_PMS_V;
+
+    REG_WRITE(reg, (REG_READ(reg) & mask) | (val << shift));
 }
 
 static inline uint32_t permc_ll_iram_get_int_source_num()
 {
-    return 0;
+    return ETS_CORE0_IRAM0_PMS_INTR_SOURCE;
 }
 
 static inline void permc_ll_iram_enable_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_VIOLATE_CLR, 0);
+    REG_SET_FIELD(SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_VIOLATE_EN, 1);
 }
 
 static inline void permc_ll_iram_clear_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_VIOLATE_CLR, 1);
 }
 
 static inline void permc_ll_iram_disable_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_IRAM0_PMS_MONITOR_VIOLATE_EN, 0);
 }
 
 static inline uint32_t permc_ll_iram_get_int_status()
 {
-    return 0;
+    uint32_t val;
+    memprot_ll_iram0_get_monitor_status_intr(PRO_CPU_NUM, &val);
+    return val;
 }
 
 static inline uint32_t permc_ll_iram_get_fault_wr()
 {
-    return 0;
+    uint32_t val;
+    memprot_ll_iram0_get_monitor_status_fault_wr(PRO_CPU_NUM, &val);
+    return val;
 }
 
 static inline uint32_t permc_ll_iram_get_fault_loadstore()
 {
-    return 0;
+    uint32_t val;
+    memprot_ll_iram0_get_monitor_status_fault_loadstore(PRO_CPU_NUM, &val);
+    return val;
 }
 
 static inline uint32_t permc_ll_iram_get_fault_world()
 {
-    return 0;
+    uint32_t val;
+    memprot_ll_iram0_get_monitor_status_fault_world(PRO_CPU_NUM, &val);
+    return val;
 }
 
 static inline uint32_t permc_ll_iram_get_fault_addr()
 {
-    return 0;
+    uint32_t addr;
+    memprot_ll_iram0_get_monitor_status_fault_addr(PRO_CPU_NUM, (void **)&addr);
+    return addr;
 }
 
 /*
@@ -207,51 +299,120 @@ static inline uint32_t permc_ll_iram_get_fault_addr()
  */
 static inline void permc_ll_drom_set_perm(permc_world_t world, permc_flags_t flags)
 {
+    switch (world) {
+        case PERMC_WORLD_0:
+            REG_SET_FIELD(SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_ROM_WORLD_0_PMS, flags);
+            break;
+        case PERMC_WORLD_1:
+            REG_SET_FIELD(SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_ROM_WORLD_1_PMS, flags);
+            break;
+        default:
+            assert(0);
+    }
+}
+
+static inline void permc_ll_dcache_set_perm(permc_world_t world, permc_flags_t flags)
+{
+    switch (world) {
+        case PERMC_WORLD_0:
+            REG_SET_FIELD(SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_CACHEDATAARRAY_PMS_0, flags);
+            REG_SET_FIELD(SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_0_CACHEDATAARRAY_PMS_1, flags);
+            break;
+        case PERMC_WORLD_1:
+            REG_SET_FIELD(SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_CACHEDATAARRAY_PMS_0, flags);
+            REG_SET_FIELD(SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG, SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_SRAM_WORLD_1_CACHEDATAARRAY_PMS_1, flags);
+            break;
+        default:
+            assert(0);
+    }
 }
 
 static inline void permc_ll_dram_set_split_line(permc_split_line_t line, intptr_t addr)
 {
+    switch(line) {
+        case PERMC_SPLIT_LINE_0:
+            memprot_ll_set_dram0_split_line_D_0((const void *)addr);
+            break;
+        case PERMC_SPLIT_LINE_1:
+            memprot_ll_set_dram0_split_line_D_1((const void *)addr);
+            break;
+        default:
+            assert(0);
+    }
 }
 
-static inline void permc_ll_dram_set_perm(permc_sram_area_t area, permc_world_t world, permc_flags_t flags)
+static inline void permc_ll_dram_set_perm(permc_area_t area, permc_world_t world, permc_flags_t flags)
 {
+    /* Only WORLD0 and WORLD1 are supported */
+    assert(world <= PERMC_WORLD_1);
+
+    assert(area < PERMC_AREA_INVALID);
+
+    uint32_t reg = SENSITIVE_CORE_X_DRAM0_PMS_CONSTRAIN_1_REG;
+    uint32_t offset;
+
+    if (world == PERMC_WORLD_0) {
+        offset = DRAM_PMS_W0_BASE;
+    } else {
+        offset = DRAM_PMS_W1_BASE;
+    }
+
+    uint32_t shift = offset + (area * DRAM_PMS_S);
+
+    uint32_t mask = ~(DRAM_PMS_V << shift);
+
+    uint32_t val = flags & DRAM_PMS_V;
+
+    REG_WRITE(reg, (REG_READ(reg) & mask) | (val << shift));
 }
 
 static inline uint32_t permc_ll_dram_get_int_source_num()
 {
-    return 0;
+    return ETS_CORE0_DRAM0_PMS_INTR_SOURCE;
 }
 
 static inline void permc_ll_dram_enable_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_VIOLATE_CLR, 0);
+    REG_SET_FIELD(SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_VIOLATE_EN, 1);
 }
 
 static inline void permc_ll_dram_clear_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_VIOLATE_CLR, 1);
 }
 
 static inline void permc_ll_dram_disable_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_DRAM0_PMS_MONITOR_VIOLATE_EN, 0);
 }
 
 static inline uint32_t permc_ll_dram_get_int_status()
 {
-    return 0;
+    uint32_t regval;
+    memprot_ll_dram0_get_monitor_status_intr(PRO_CPU_NUM, &regval);
+    return regval;
 }
 
 static inline uint32_t permc_ll_dram_get_fault_wr()
 {
-    return 0;
+    uint32_t regval;
+    memprot_ll_dram0_get_monitor_status_fault_wr(PRO_CPU_NUM, &regval);
+    return regval;
 }
 
 static inline uint32_t permc_ll_dram_get_fault_world()
 {
-    return 0;
+    uint32_t regval;
+    memprot_ll_dram0_get_monitor_status_fault_world(PRO_CPU_NUM, &regval);
+    return regval;
 }
 
 static inline uint32_t permc_ll_dram_get_fault_addr()
 {
-    return 0;
+    uint32_t regval;
+    memprot_ll_dram0_get_monitor_status_fault_addr(PRO_CPU_NUM, (void**)&regval);
+    return regval;
 }
 
 /*
@@ -261,101 +422,213 @@ static inline uint32_t permc_ll_dram_get_fault_addr()
  */
 static inline void permc_ll_rtc_set_split_line(permc_world_t world, intptr_t addr)
 {
+    switch (world) {
+        case PERMC_WORLD_0:
+            REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_9_REG, SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_SPLTADDR_WORLD_0, (addr >> 2));
+            break;
+        case PERMC_WORLD_1:
+            REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_9_REG, SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_RTCFAST_SPLTADDR_WORLD_1, (addr >> 2));
+            break;
+        default:
+            assert(0);
+    }
 }
 
-static inline void permc_ll_rtc_set_perm(permc_sram_area_t area, permc_world_t world, permc_flags_t flags)
+static inline void permc_ll_rtc_set_perm(permc_area_t area, permc_world_t world, permc_flags_t flags)
 {
+    assert(world <= PERMC_WORLD_1);
+
+    /* Since there is a single split line, only 2 areas are possible */
+    assert(area < PERMC_AREA_2);
+
+    uint32_t reg = SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_10_REG;
+    uint32_t offset;
+    uint32_t perm = 0;
+
+    /* For RTC, the order for R and W permission is reversed
+     * 1: Write
+     * 2: Read
+     * 4: Execute
+     */
+    if (flags & PERMC_ACCESS_R) {
+        perm = perm | 2;
+    }
+
+    if (flags & PERMC_ACCESS_W) {
+        perm = perm | 1;
+
+    }
+
+    if (flags & PERMC_ACCESS_X) {
+        perm = perm | 4;
+    }
+
+    if (world == PERMC_WORLD_0) {
+        offset = RTC_PMS_W0_BASE;
+    } else {
+        offset = RTC_PMS_W1_BASE;
+    }
+
+    uint32_t shift = offset + (area * RTC_PMS_S);
+
+    uint32_t mask = ~(RTC_PMS_V << shift);
+
+    uint32_t val = flags & RTC_PMS_V;
+
+    REG_WRITE(reg, (REG_READ(reg) & mask) | (val << shift));
+}
+
+/*
+ *  Flash cache ( Applies to both Icache and Dcache )
+ */
+static inline void permc_ll_flash_cache_set_split_line(permc_split_line_t line, intptr_t paddr, size_t size_in_pages)
+{
+    switch (line) {
+        case PERMC_SPLIT_LINE_0:
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE0_ADDR_REG, APB_CTRL_FLASH_ACE0_ADDR_S, paddr);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE0_SIZE_REG, APB_CTRL_FLASH_ACE0_SIZE, size_in_pages);
+            break;
+        case PERMC_SPLIT_LINE_1:
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE1_ADDR_REG, APB_CTRL_FLASH_ACE1_ADDR_S, paddr);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE1_SIZE_REG, APB_CTRL_FLASH_ACE1_SIZE, size_in_pages);
+            break;
+        case PERMC_SPLIT_LINE_2:
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE2_ADDR_REG, APB_CTRL_FLASH_ACE2_ADDR_S, paddr);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE2_SIZE_REG, APB_CTRL_FLASH_ACE2_SIZE, size_in_pages);
+            break;
+        case PERMC_SPLIT_LINE_3:
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE3_ADDR_REG, APB_CTRL_FLASH_ACE3_ADDR_S, paddr);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE3_SIZE_REG, APB_CTRL_FLASH_ACE3_SIZE, size_in_pages);
+            break;
+        default:
+            assert(0);
+    }
+}
+
+static inline void permc_ll_flash_cache_set_perm(permc_area_t area, permc_world_t world, permc_flags_t flags)
+{
+    uint32_t shift = (FLASH_ICACHE_S * world);
+
+    if (flags == PERMC_ACCESS_ALL) {
+        flags = 0b11;
+    } else if (flags & PERMC_ACCESS_W) {
+        assert(0);
+    } else if (flags & PERMC_ACCESS_X) {
+        flags = flags | 0b1;
+    }
+
+    uint32_t mask = ~(FLASH_ICACHE_V << shift);
+
+    uint32_t val = 0x40 | flags << shift;
+
+    switch (area) {
+        case PERMC_AREA_0: {
+            uint32_t reg_val = REG_GET_FIELD(APB_CTRL_FLASH_ACE0_ATTR_REG, APB_CTRL_FLASH_ACE0_ATTR);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE0_ATTR_REG, APB_CTRL_FLASH_ACE0_ATTR, (reg_val & mask) | val);
+            break;
+        }
+        case PERMC_AREA_1: {
+            uint32_t reg_val = REG_GET_FIELD(APB_CTRL_FLASH_ACE1_ATTR_REG, APB_CTRL_FLASH_ACE1_ATTR);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE1_ATTR_REG, APB_CTRL_FLASH_ACE1_ATTR, (reg_val & mask) | val);
+            break;
+        } case PERMC_AREA_2: {
+            uint32_t reg_val = REG_GET_FIELD(APB_CTRL_FLASH_ACE2_ATTR_REG, APB_CTRL_FLASH_ACE2_ATTR);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE2_ATTR_REG, APB_CTRL_FLASH_ACE2_ATTR, (reg_val & mask) | val);
+            break;
+        } case PERMC_AREA_3: {
+            uint32_t reg_val = REG_GET_FIELD(APB_CTRL_FLASH_ACE3_ATTR_REG, APB_CTRL_FLASH_ACE3_ATTR);
+            REG_SET_FIELD(APB_CTRL_FLASH_ACE3_ATTR_REG, APB_CTRL_FLASH_ACE3_ATTR, (reg_val & mask) | val);
+            break;
+        }
+        default:
+            assert(0);
+    }
+}
+
+static inline uint32_t permc_ll_flash_cache_get_int_source_num()
+{
+    return ETS_CACHE_CORE0_ACS_INTR_SOURCE;
 }
 
 /*
  *  Flash Icache
  */
-static inline void permc_ll_flash_icache_set_split_line(permc_split_line_t line, intptr_t addr)
-{
-}
-
-static inline void permc_ll_flash_icache_set_perm(permc_sram_area_t area, permc_world_t world, permc_flags_t flags)
-{
-}
-
-static inline uint32_t permc_ll_flash_cache_get_int_source_num()
-{
-    return 0;
-}
-
 static inline void permc_ll_flash_icache_enable_int()
 {
+    REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_CLR_REG, EXTMEM_CORE0_IBUS_REJECT_INT_CLR, 0);
+	REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ENA_REG, EXTMEM_CORE0_IBUS_REJECT_INT_ENA, 1);
 }
 
 static inline void permc_ll_flash_icache_clear_int()
 {
+    REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_CLR_REG, EXTMEM_CORE0_IBUS_REJECT_INT_CLR, 1);
 }
 
 static inline void permc_ll_flash_icache_disable_int()
 {
+	REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ENA_REG, EXTMEM_CORE0_IBUS_REJECT_INT_ENA, 0);
 }
 
 static inline uint32_t permc_ll_flash_icache_get_int_status()
 {
-    return 0;
+    return REG_GET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ST_REG, EXTMEM_CORE0_IBUS_REJECT_ST);
 }
 
 static inline uint32_t permc_ll_flash_icache_get_fault_attribute()
 {
-    return 0;
+    /* 1 : Execute
+     * 2 : Read
+     */
+    return REG_GET_FIELD(EXTMEM_CORE0_IBUS_REJECT_ST_REG, EXTMEM_CORE0_IBUS_ATTR);
 }
 
 static inline uint32_t permc_ll_flash_icache_get_fault_world()
 {
-    return 0;
+    return REG_GET_FIELD(EXTMEM_CORE0_IBUS_REJECT_ST_REG, EXTMEM_CORE0_IBUS_WORLD);
 }
 
 static inline uint32_t permc_ll_flash_icache_get_fault_addr()
 {
-    return 0;
+    return REG_READ(EXTMEM_CORE0_IBUS_REJECT_VADDR_REG);
 }
 
 /*
  * Flash Dcache
  */
-static inline void permc_ll_flash_dcache_set_split_line(permc_split_line_t line, intptr_t addr)
-{
-}
-
-static inline void permc_ll_flash_dcache_set_perm(permc_sram_area_t area, permc_world_t world, permc_flags_t flags)
-{
-}
-
 static inline void permc_ll_flash_dcache_enable_int()
 {
+	REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_CLR_REG, EXTMEM_CORE0_DBUS_REJECT_INT_CLR, 0);
+	REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ENA_REG, EXTMEM_CORE0_DBUS_REJECT_INT_ENA, 1);
 }
 
 static inline void permc_ll_flash_dcache_clear_int()
 {
+    REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_CLR_REG, EXTMEM_CORE0_DBUS_REJECT_INT_CLR, 1);
 }
 
 static inline void permc_ll_flash_dcache_disable_int()
 {
+    REG_SET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ENA_REG, EXTMEM_CORE0_DBUS_REJECT_INT_ENA, 0);
 }
 
 static inline uint32_t permc_ll_flash_dcache_get_int_status()
 {
-    return 0;
+    return REG_GET_FIELD(EXTMEM_CORE0_ACS_CACHE_INT_ST_REG, EXTMEM_CORE0_DBUS_REJECT_ST);
 }
 
 static inline uint32_t permc_ll_flash_dcache_get_fault_attribute()
 {
-    return 0;
+    return REG_GET_FIELD(EXTMEM_CORE0_DBUS_REJECT_ST_REG, EXTMEM_CORE0_DBUS_ATTR);
 }
 
 static inline uint32_t permc_ll_flash_dcache_get_fault_world()
 {
-    return 0;
+    return REG_GET_FIELD(EXTMEM_CORE0_DBUS_REJECT_ST_REG, EXTMEM_CORE0_DBUS_WORLD);
 }
 
 static inline uint32_t permc_ll_flash_dcache_get_fault_addr()
 {
-    return 0;
+    return REG_READ(EXTMEM_CORE0_DBUS_REJECT_VADDR_REG);
 }
 
 /*
@@ -363,48 +636,74 @@ static inline uint32_t permc_ll_flash_dcache_get_fault_addr()
  */
 static inline void permc_ll_pif_set_perm(permc_pif_t type, permc_world_t world, permc_flags_t flags)
 {
+    assert(type < PERMC_MAX);
+
+    uint32_t reg = 0;
+    uint32_t reg_off = type / PIF_PMS_MAX_REG_ENTRY;
+    uint32_t bit_field_base = 30 - (2 * (type % PIF_PMS_MAX_REG_ENTRY));
+
+    switch (world) {
+        case PERMC_WORLD_0:
+            reg = SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_1_REG + (4 * reg_off);
+            break;
+        case PERMC_WORLD_1:
+            reg = SENSITIVE_CORE_0_PIF_PMS_CONSTRAIN_5_REG + (4 * reg_off);
+            break;
+        default:
+            assert(0);
+    }
+
+    uint32_t mask = ~(PIF_PMS_V << bit_field_base);
+
+    uint32_t val = flags & PIF_PMS_V;
+
+    REG_WRITE(reg, (REG_READ(reg) & mask) | (val << bit_field_base));
 }
 
 static inline uint32_t permc_ll_pif_get_int_source_num()
 {
-    return 0;
+    return ETS_CORE0_PIF_PMS_INTR_SOURCE;
 }
 
 static inline void permc_ll_pif_enable_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_CLR, 0);
+    REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_EN, 1);
 }
 
 static inline void permc_ll_pif_clear_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_CLR, 1);
 }
 
 static inline void permc_ll_pif_disable_int()
 {
+    REG_SET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_1_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_EN, 0);
 }
 
 static inline uint32_t permc_ll_pif_get_int_status()
 {
-    return 0;
+    return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_INTR);
 }
 
 static inline uint32_t permc_ll_pif_get_fault_wr()
 {
-    return 0;
+    return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HWRITE);
 }
 
 static inline uint32_t permc_ll_pif_get_fault_loadstore()
 {
-    return 0;
+    return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HPORT_0);
 }
 
 static inline uint32_t permc_ll_pif_get_fault_world()
 {
-    return 0;
+    return REG_GET_FIELD(SENSITIVE_CORE_0_PIF_PMS_MONITOR_2_REG, SENSITIVE_CORE_0_PIF_PMS_MONITOR_VIOLATE_STATUS_HWORLD);
 }
 
 static inline uint32_t permc_ll_pif_get_fault_addr()
 {
-    return 0;
+    return REG_READ(SENSITIVE_CORE_0_PIF_PMS_MONITOR_3_REG);
 }
 
 #ifdef __cplusplus

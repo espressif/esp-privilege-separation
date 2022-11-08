@@ -23,7 +23,9 @@ menu "Privilege Separation"
 
     config PA_ALLOCATE_USER_IRAM_SIZE
         hex "Allocate IRAM space for user application"
-        range 0 0x10000
+        range 0 0x10000 if IDF_TARGET_ESP32C3
+        range 0 0x3000 if (IDF_TARGET_ESP32S3 && ESP32S3_INSTRUCTION_CACHE_16KB)
+        range 0 0x1F400 if (IDF_TARGET_ESP32S3 && ESP32S3_INSTRUCTION_CACHE_32KB)
         default 0x800
         help
             Allocate IRAM for user space application. This size will reflect in the user_app as well.
