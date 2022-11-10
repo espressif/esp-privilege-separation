@@ -392,10 +392,8 @@ static void esp_priv_access_revoke_world1_peripheral_permissions(void)
     esp_priv_access_set_periph_perm(PA_UART1, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_I2C, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_MISC, PA_WORLD_1, PA_PERM_NONE);
-    esp_priv_access_set_periph_perm(PA_WDG, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_IO_MUX, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_RTC, PA_WORLD_1, PA_PERM_NONE);
-    esp_priv_access_set_periph_perm(PA_TIMER, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_FE, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_FE2, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_GPIO, PA_WORLD_1, PA_PERM_NONE);
@@ -426,12 +424,31 @@ static void esp_priv_access_revoke_world1_peripheral_permissions(void)
     esp_priv_access_set_periph_perm(PA_INTERRUPT, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_SENSITIVE, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_SYSTEM, PA_WORLD_1, PA_PERM_NONE);
-    esp_priv_access_set_periph_perm(PA_USB_DEVICE, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_BT_PWR, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_APB_ADC, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_CRYPTO_DMA, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_CRYPTO_PERI, PA_WORLD_1, PA_PERM_NONE);
     esp_priv_access_set_periph_perm(PA_USB_WRAP, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_USB_DEVICE, PA_WORLD_1, PA_PERM_NONE);
+
+#if CONFIG_IDF_TARGET_ESP32C3
+    esp_priv_access_set_periph_perm(PA_WDG, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_TIMER, PA_WORLD_1, PA_PERM_NONE);
+#elif CONFIG_IDF_TARGET_ESP32S3
+    esp_priv_access_set_periph_perm(PA_I2S0, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_HINF, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_PWM0, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_BACKUP, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SLC, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_PCNT, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SLCHOST, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_UART2, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_PWM1, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SDIO_HOST, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_I2C_EXT1, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_SPI_3, PA_WORLD_1, PA_PERM_NONE);
+    esp_priv_access_set_periph_perm(PA_USB, PA_WORLD_1, PA_PERM_NONE);
+#endif
 }
 
 esp_err_t esp_priv_access_init(esp_priv_access_intr_handler_t fn)
