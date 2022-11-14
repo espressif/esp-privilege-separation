@@ -480,19 +480,20 @@ index 791116cfbc..4a0e466da4 100644
 +    rsr     a0, EXCSAVE_1
 +    rfe
 diff --git a/components/freertos/port/xtensa/xtensa_vectors.S b/components/freertos/port/xtensa/xtensa_vectors.S
-index 1560ff27d6..683247341b 100644
+index 1560ff27d6..bf63ae72d9 100644
 --- a/components/freertos/port/xtensa/xtensa_vectors.S
 +++ b/components/freertos/port/xtensa/xtensa_vectors.S
-@@ -94,6 +94,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+@@ -94,6 +94,9 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  #include "esp_private/panic_reason.h"
  #include "sdkconfig.h"
  #include "soc/soc.h"
 +#include "soc/sensitive_reg.h"
 +#include "soc/extmem_reg.h"
++#include "soc/world_controller_reg.h"
  
  /*
    Define for workaround: pin no-cpu-affinity tasks to a cpu when fpu is used.
-@@ -571,6 +573,14 @@ _call_alignment_handler:
+@@ -571,6 +574,98 @@ _call_alignment_handler:
      j       .LS_exit
  #endif
  
@@ -502,12 +503,96 @@ index 1560ff27d6..683247341b 100644
 +    movi    a0, EXCCAUSE_LEVEL1INTERRUPT
 +    wsr     a0, EXCCAUSE
 +    j       _xt_lowint1
++
++    .type       _xt_user_panic_handler,@function
++    .align      4
++_xt_user_panic_handler:
++    mov     a0, sp                          /* sp == a1 */
++    addi    sp, sp, -XT_STK_FRMSZ           /* allocate interrupt stack frame */
++    s32i    a0, sp, XT_STK_A1               /* save pre-interrupt SP */
++    rsr     a0, PS                          /* save interruptee's PS */
++    s32i    a0, sp, XT_STK_PS
++    rsr     a0, EPC_1                       /* save interruptee's PC */
++    s32i    a0, sp, XT_STK_PC
++    rsr     a0, EXCSAVE_1                   /* save interruptee's a0 */
++    s32i    a0, sp, XT_STK_A0
++    movi    a0, _xt_user_exit               /* save exit point for dispatch */
++    s32i    a0, sp, XT_STK_EXIT
++
++    /* Save exc cause and vaddr into exception frame */
++    rsr     a0, EXCCAUSE
++    s32i    a0, sp, XT_STK_EXCCAUSE
++    rsr     a0, EXCVADDR
++    s32i    a0, sp, XT_STK_EXCVADDR
++
++    /* EXCSAVE_1 should now be free to use. Use it to keep a copy of the
++    current stack pointer that points to the exception frame (XT_STK_FRAME).*/
++    #ifdef XT_DEBUG_BACKTRACE
++    #ifndef __XTENSA_CALL0_ABI__
++    mov     a0, sp
++    wsr     a0, EXCSAVE_1
++    #endif
++    #endif
++
++    /* Save rest of interrupt context and enter RTOS. */
++    call0   XT_RTOS_INT_ENTER               /* common RTOS interrupt entry */
++
++    /* !! We are now on the RTOS system stack !! */
++
++    /* Set up PS for C, enable interrupts above this level and clear EXCM. */
++    #ifdef __XTENSA_CALL0_ABI__
++    movi    a0, PS_INTLEVEL(1) | PS_UM
++    #else
++    movi    a0, PS_INTLEVEL(1) | PS_UM | PS_WOE
++    #endif
++    wsr     a0, PS
++    rsync
++
++    /* This bit of code provides a nice debug backtrace in the debugger.
++       It does take a few more instructions, so undef XT_DEBUG_BACKTRACE
++       if you want to save the cycles.
++       At this point, the exception frame should have been allocated and filled,
++       and current sp points to the interrupt stack (for non-nested interrupt)
++       or below the allocated exception frame (for nested interrupts). Copy the
++       pre-exception's base save area below the current SP.
++    */
++    #ifdef XT_DEBUG_BACKTRACE
++    #ifndef __XTENSA_CALL0_ABI__
++    rsr     a0, EXCSAVE_1                   /* Get exception frame pointer stored in EXCSAVE_x */
++    l32i    a3, a0, XT_STK_A0               /* Copy pre-exception a0 (return address) */
++    s32e    a3, a1, -16
++    l32i    a3, a0, XT_STK_A1               /* Copy pre-exception a1 (stack pointer) */
++    s32e    a3, a1, -12
++    /* Backtracing only needs a0 and a1, no need to create full base save area.
++       Also need to change current frame's return address to point to pre-exception's
++       last run instruction.
++     */
++    rsr     a0, EPC_1                       /* return address */
++    movi    a4, 0xC0000000                  /* constant with top 2 bits set (call size) */
++    or      a0, a0, a4                      /* set top 2 bits */
++    addx2   a0, a4, a0                      /* clear top bit -- simulating call4 size   */
++    #endif
++    #endif
++
++    /* OK to call C code at this point, dispatch user panic handler */
++    /* Interrupt number for WORLD1 interrupts/exceptions */
++    movi    a3, 18
++    get_percpu_entry_for a3, a12
++    movi    a4, _xt_interrupt_table
++    addx8   a3, a3, a4                      /* a3 = address of interrupt table entry */
++    l32i    a4, a3, XIE_HANDLER             /* a4 = handler address */
++    mov     a2, a6                          /* save in windowed reg */
++    l32i    a6, a3, XIE_ARG                 /* a6 = handler arg */
++    callx4  a4                              /* call handler */
++
++    /* Done handling user space exception, transfer control to OS */
++    call0   XT_RTOS_INT_EXIT                /* does not return directly here */
 +#endif
 +
  /*
  --------------------------------------------------------------------------------
    User exception handler.
-@@ -581,7 +591,27 @@ _call_alignment_handler:
+@@ -581,7 +676,27 @@ _call_alignment_handler:
      .align      4
  
  _xt_user_exc:
@@ -536,7 +621,7 @@ index 1560ff27d6..683247341b 100644
      /* If level 1 interrupt then jump to the dispatcher */
      rsr     a0, EXCCAUSE
      beqi    a0, EXCCAUSE_LEVEL1INTERRUPT, _xt_lowint1
-@@ -608,6 +638,32 @@ _xt_user_exc:
+@@ -608,6 +723,38 @@ _xt_user_exc:
  .LS_exit:
  #endif
  
@@ -564,12 +649,18 @@ index 1560ff27d6..683247341b 100644
 +    l32i    a0, a0, 0
 +    extui   a0, a0, 2, 3
 +    bgei    a0, 1, _xt_perm_violation
++
++    /* Check if exception occurred in user space (WORLD1) */
++    movi    a0, WORLD_CONTROLLER_WCL_CORE_0_STATUSTABLE1_REG
++    l32i    a0, a0, 0
++    extui   a0, a0, 0, 1
++    beqi    a0, 1, _xt_user_panic_handler
 +#endif
 +
      /* Handle all other exceptions. All can have user-defined handlers. */
      /* NOTE: we'll stay on the user stack for exception handling.       */
  
-@@ -738,77 +794,6 @@ _xt_user_exit:
+@@ -738,77 +885,6 @@ _xt_user_exit:
      rfe                                     /* PS.EXCM is cleared */
  
  
@@ -3411,3 +3502,30 @@ index f32d4fb688..55d7dda1fc 100644
                     '-ex', "target remote | \"{python}\" \"{script}\" --target {target} \"{output_file}\""
                         .format(python=sys.executable,
                                 script=PANIC_OUTPUT_DECODE_SCRIPT,
+diff --git a/tools/idf_monitor_base/output_helpers.py b/tools/idf_monitor_base/output_helpers.py
+index 480181e23d..967c78d8d8 100644
+--- a/tools/idf_monitor_base/output_helpers.py
++++ b/tools/idf_monitor_base/output_helpers.py
+@@ -12,6 +12,7 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
++import os
+ import subprocess
+ import sys
+ from typing import BinaryIO, Callable, Optional, Union  # noqa: F401
+@@ -48,4 +49,14 @@ def lookup_pc_address(pc_addr, toolchain_prefix, elf_file):  # type: (str, str,
+             return translation.decode()
+     except OSError as e:
+         red_print('%s: %s' % (' '.join(cmd), e))
++
++    user_app_elf = os.path.dirname(elf_file) + '/user_app/user_app.elf'
++    if os.path.isfile(user_app_elf):
++        user_cmd = ['%saddr2line' % toolchain_prefix, '-pfiaC', '-e', user_app_elf, pc_addr]
++        try:
++            translation = subprocess.check_output(user_cmd, cwd='.')
++            if b'?? ??:0' not in translation:
++                return translation.decode()
++        except OSError as e:
++            red_print('%s: %s' % (' '.join(user_cmd), e))
+     return None
