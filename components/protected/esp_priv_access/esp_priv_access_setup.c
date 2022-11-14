@@ -143,9 +143,7 @@ static PA_INTR_ATTR void esp_priv_access_violation_intr_func(void *args)
         intr_func(args);
     }
 
-#if CONFIG_IDF_TARGET_ESP32C3
     esp_priv_access_handle_crashed_task();
-#endif
 }
 
 /* Configure top level permission violation interrupt,
