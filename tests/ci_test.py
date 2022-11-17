@@ -100,6 +100,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     build = args.build
 
+    if (args.chip == "esp32c3"):
+        iram_mask = "0x4038"
+        dram_mask = "0x3fc8"
+        reserved_rom_dram_mask = "0x3fcd"
+    elif (args.chip == "esp32s3"):
+        iram_mask = "0x4037"
+        dram_mask = "0x3fc9"
+        reserved_rom_dram_mask = "0x3fce"
+
     freeDevice = esppoolGetFreeDevice(args.chip)
     if (freeDevice == ""):
         raise Exception("No free device available")
@@ -122,16 +131,16 @@ if __name__ == '__main__':
             'Illegal IRAM access: Fault addr: 0x4037',
             'Deleting icache_access_t',
             'Deleting icache_execute_',
-            'Illegal IRAM access: Fault addr: 0x4038',
+            'Illegal IRAM access: Fault addr: %s' % iram_mask,
             'Deleting iram_execute_ta',
             'Deleting iram_write_task',
             'Deleting iram_read_task',
             'Illegal DRAM access: Fault addr: 0x3ff1',
             'Deleting drom_task',
-            'Illegal DRAM access: Fault addr: 0x3fc8',
+            'Illegal DRAM access: Fault addr: %s' % dram_mask,
             'Deleting dram_write_task',
             'Deleting dram_read_task',
-            'Illegal DRAM access: Fault addr: 0x3fcd',
+            'Illegal DRAM access: Fault addr: %s' % reserved_rom_dram_mask,
             'Deleting rom_reserve_wri',
             'Deleting rom_reserve_rea',
             'Illegal RTC access:',

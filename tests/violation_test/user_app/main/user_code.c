@@ -31,6 +31,8 @@
 
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/rom_layout.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/rom_layout.h"
 #endif
 
 #define BLINK_GPIO      GPIO_NUM_4
@@ -38,6 +40,7 @@
 extern uint32_t _user_data_start;
 extern uint32_t _user_text_start;
 extern uint32_t _user_text_end;
+extern int _reserve_w1_iram_end;
 extern uint32_t _user_xip_text_start;
 
 void irom_violation_task()
@@ -79,7 +82,7 @@ void sram_icache_execute_violation_task()
 
 void iram_execute_violation_task()
 {
-    uint32_t end = (uint32_t)&_user_text_end;
+    uint32_t end = (uint32_t)&_reserve_w1_iram_end;
 
     void (*forbidden_iram)(void) = (void(*)(void))(end + 0x1000);
 
@@ -92,7 +95,7 @@ void iram_execute_violation_task()
 
 void iram_write_violation_task()
 {
-    uint32_t end = (uint32_t)&_user_text_end;
+    uint32_t end = (uint32_t)&_reserve_w1_iram_end;
 
     uint32_t *forbidden_iram = (uint32_t *)(end + 0x1000);
 
@@ -105,7 +108,7 @@ void iram_write_violation_task()
 
 void iram_read_violation_task()
 {
-    uint32_t end = (uint32_t)&_user_text_end;
+    uint32_t end = (uint32_t)&_reserve_w1_iram_end;
 
     uint32_t *forbidden_iram = (uint32_t *)(end + 0x1000);
 
@@ -157,7 +160,7 @@ void dram_read_violation_task()
 
 void rom_reserve_write_violation_task()
 {
-    printf("Writing to reserve ROM DRAM region");
+    printf("Writing to reserve ROM DRAM region\n");
 
     const ets_rom_layout_t *layout = ets_rom_layout_p;
     *(uint32_t *)layout->dram0_rtos_reserved_start = 0x41414141;
@@ -171,7 +174,7 @@ void rom_reserve_write_violation_task()
 
 void rom_reserve_read_violation_task()
 {
-    printf("Reading from reserve ROM DRAM region");
+    printf("Reading from reserve ROM DRAM region\n");
 
     const ets_rom_layout_t *layout = ets_rom_layout_p;
 
@@ -206,7 +209,7 @@ void flash_icache_violation_task()
 {
     uint32_t start = (uint32_t)&_user_xip_text_start;
 
-    void (*forbidden_flash_cache)(void) = (void(*)(void))(start - 0x10000);
+    void (*forbidden_flash_cache)(void) = (void(*)(void))(start - 0x400000);
 
     forbidden_flash_cache();
 

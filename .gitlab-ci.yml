@@ -62,26 +62,31 @@ after_script:
 .build_examples: &build_examples
   # Build blink
   - pushd $CI_PROJECT_DIR/examples/blink
+  - idf.py set-target $TARGET_NAME
   - idf.py build
   - popd
   # Build http_request
   - pushd $CI_PROJECT_DIR/examples/http_request
+  - idf.py set-target $TARGET_NAME
   - idf.py build
   - popd
   # Build https_request
   - pushd $CI_PROJECT_DIR/examples/https_request
+  - idf.py set-target $TARGET_NAME
   - idf.py build
   - popd
   # Build esp_http_client
   - pushd $CI_PROJECT_DIR/examples/esp_http_client
+  - idf.py set-target $TARGET_NAME
   - idf.py build
   - popd
   # Build esp_user_ota
   - pushd $CI_PROJECT_DIR/examples/esp_user_ota
+  - idf.py set-target $TARGET_NAME
   - idf.py build
   - popd
 
-build_examples_v4.3:
+.build_examples_v4.3:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
@@ -89,7 +94,7 @@ build_examples_v4.3:
 
   artifacts:
     paths:
-      - ${CI_PIPELINE_ID}.tar.gz
+      - ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.3.tar.gz
     expire_in: 2 days
     when: always
 
@@ -97,7 +102,7 @@ build_examples_v4.3:
     - *setup_idf_v4_3
     - *build_examples
 
-build_examples_v4.4:
+.build_examples_v4.4:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
@@ -105,7 +110,7 @@ build_examples_v4.4:
 
   artifacts:
     paths:
-      - ${CI_PIPELINE_ID}.tar.gz
+      - ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.4.tar.gz
     expire_in: 2 days
     when: always
 
@@ -113,7 +118,22 @@ build_examples_v4.4:
     - *setup_idf_v4_4
     - *build_examples
 
-build_tests_v4.3:
+esp32c3_build_examples_v4.3:
+  extends: .build_examples_v4.3
+  variables:
+    TARGET_NAME: "esp32c3"
+
+esp32c3_build_examples_v4.4:
+  extends: .build_examples_v4.4
+  variables:
+    TARGET_NAME: "esp32c3"
+
+esp32s3_build_examples_v4.4:
+  extends: .build_examples_v4.4
+  variables:
+    TARGET_NAME: "esp32s3"
+
+.build_tests_v4.3:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
@@ -121,7 +141,7 @@ build_tests_v4.3:
 
   artifacts:
     paths:
-     - ${CI_PIPELINE_ID}_v4.3.tar.gz
+     - ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.3.tar.gz
     expire_in: 2 days
     when: always
 
@@ -129,12 +149,13 @@ build_tests_v4.3:
     - *setup_idf_v4_3
     # Build violation_test
     - pushd $CI_PROJECT_DIR/tests/violation_test
+    - idf.py set-target $TARGET_NAME
     - idf.py build
-    - tar -czvf ${CI_PIPELINE_ID}_v4.3.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
-    - mv ${CI_PIPELINE_ID}_v4.3.tar.gz $CI_PROJECT_DIR/
+    - tar -czvf ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.3.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
+    - mv ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.3.tar.gz $CI_PROJECT_DIR/
     - popd
 
-build_tests_v4.4:
+.build_tests_v4.4:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
@@ -142,7 +163,7 @@ build_tests_v4.4:
 
   artifacts:
     paths:
-     - ${CI_PIPELINE_ID}_v4.4.tar.gz
+     - ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.4.tar.gz
     expire_in: 2 days
     when: always
 
@@ -150,28 +171,59 @@ build_tests_v4.4:
     - *setup_idf_v4_4
     # Build violation_test
     - pushd $CI_PROJECT_DIR/tests/violation_test
+    - idf.py set-target $TARGET_NAME
     - idf.py build
-    - tar -czvf ${CI_PIPELINE_ID}_v4.4.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
-    - mv ${CI_PIPELINE_ID}_v4.4.tar.gz $CI_PROJECT_DIR/
+    - tar -czvf ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.4.tar.gz build/bootloader/bootloader.bin build/partition_table/partition-table.bin build/violation_test.bin build/user_app/user_app.bin
+    - mv ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.4.tar.gz $CI_PROJECT_DIR/
     - popd
 
-run_tests_v4.3:
-  stage: test
-  image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
-  tags:
-    - test_esppool
-  script:
-    - tar -xzf ${CI_PIPELINE_ID}_v4.3.tar.gz
-    - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip esp32c3 --build $CI_PROJECT_DIR/build
+esp32c3_build_tests_v4.3:
+  extends: .build_tests_v4.3
+  variables:
+    TARGET_NAME: "esp32c3"
 
-run_tests_v4.4:
+esp32c3_build_tests_v4.4:
+  extends: .build_tests_v4.4
+  variables:
+    TARGET_NAME: "esp32c3"
+
+esp32s3_build_tests_v4.4:
+  extends: .build_tests_v4.4
+  variables:
+    TARGET_NAME: "esp32s3"
+
+.run_tests_v4.3:
   stage: test
   image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
   tags:
     - test_esppool
   script:
-    - tar -xzf ${CI_PIPELINE_ID}_v4.4.tar.gz
-    - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip esp32c3 --build $CI_PROJECT_DIR/build
+    - tar -xzf ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.3.tar.gz
+    - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip $TARGET_NAME --build $CI_PROJECT_DIR/build
+
+.run_tests_v4.4:
+  stage: test
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env:priv-sep
+  tags:
+    - test_esppool
+  script:
+    - tar -xzf ${CI_PIPELINE_ID}_${TARGET_NAME}_v4.4.tar.gz
+    - python3 -u $CI_PROJECT_DIR/tests/ci_test.py --chip $TARGET_NAME --build $CI_PROJECT_DIR/build
+
+esp32c3_run_tests_v4.3:
+  extends: .run_tests_v4.3
+  variables:
+    TARGET_NAME: "esp32c3"
+
+esp32c3_run_tests_v4.4:
+  extends: .run_tests_v4.4
+  variables:
+    TARGET_NAME: "esp32c3"
+
+esp32s3_run_tests_v4.4:
+  extends: .run_tests_v4.4
+  variables:
+    TARGET_NAME: "esp32s3"
 
 build_docs:
   stage: docs
