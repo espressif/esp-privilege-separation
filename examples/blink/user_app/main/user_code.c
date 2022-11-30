@@ -25,7 +25,11 @@
 
 #include "esp_log.h"
 
+#if CONFIG_IDF_TARGET_ESP32C3
 #define WS2812_GPIO     8
+#elif CONFIG_IDF_TARGET_ESP32S3
+#define WS2812_GPIO    48
+#endif
 #define BUTTON_IO       9
 #define INTR_LED        2
 #define BLINK_GPIO      10

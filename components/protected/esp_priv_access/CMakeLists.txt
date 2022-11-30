@@ -1,11 +1,16 @@
+idf_build_get_property(target IDF_TARGET)
+
 if(USER_APP_BUILD)
     set(srcs)
 else()
     set(srcs "esp_priv_access_image_utility.c"
              "esp_priv_access_setup.c"
-             "esp_priv_access_panic.c"
              "esp_priv_access_ota_utils.c")
     set(cacert)
+endif()
+
+if(CONFIG_IDF_TARGET_ESP32C3)
+    list(APPEND srcs "esp_priv_access_panic.c")
 endif()
 
 if(CONFIG_PA_ENABLE_USER_APP_SECURE_BOOT)
@@ -38,6 +43,7 @@ endif()
 idf_component_get_property(bootloader_support_dir bootloader_support COMPONENT_DIR)
 
 set(includes "include"
+             "include/${target}"
              "${bootloader_support_dir}/include_bootloader")
 
 idf_component_register(SRCS ${srcs}

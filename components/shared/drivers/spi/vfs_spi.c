@@ -93,7 +93,7 @@ static int spi_master_close(int fd)
     return 0;
 }
 
-static int spi_master_ioctl(int fd, int cmd, void* arg)
+static int spi_master_ioctl(int fd, int cmd, va_list arg)
 {
     assert(fd == SPI_MASTER_FD_1 || fd == SPI_MASTER_FD_2);
     spi_host_device_t host_id = fd - SPI_MASTER_FD_0;

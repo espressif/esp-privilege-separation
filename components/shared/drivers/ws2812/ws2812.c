@@ -80,7 +80,7 @@ static int ws2812_close(int fd)
     return 0;
 }
 
-static int ws2812_ioctl(int fd, int cmd, void* arg)
+static int ws2812_ioctl(int fd, int cmd, va_list arg)
 {
     assert(fd == WS2812_FD_0 || fd == WS2812_FD_1);
 

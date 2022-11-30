@@ -21,6 +21,8 @@
 
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 #include <esp32c3/rom/crc.h>
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include <esp32s3/rom/crc.h>
 #endif
 
 static const char *TAG = "ota_utils";
