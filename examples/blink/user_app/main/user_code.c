@@ -27,10 +27,11 @@
 
 #if CONFIG_IDF_TARGET_ESP32C3
 #define WS2812_GPIO     8
+#define BUTTON_IO       9
 #elif CONFIG_IDF_TARGET_ESP32S3
 #define WS2812_GPIO    48
+#define BUTTON_IO       0
 #endif
-#define BUTTON_IO       9
 #define INTR_LED        2
 #define BLINK_GPIO      10
 

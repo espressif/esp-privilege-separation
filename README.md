@@ -35,6 +35,7 @@ To get started, please try out the [examples](examples). Each example has README
 
 ### Supported SoCs
 - ESP32-C3 based development board
+- ESP32-S3 based development board
 
 ## Documentation
 

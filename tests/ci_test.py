@@ -22,6 +22,7 @@ import argparse
 import paramiko
 import time
 from threading import Timer
+from random import randint
 
 def esppoolGetFreeDevice(chip):
     command = 'device=$(esppool -l | grep \'' + chip + ' .*Free\' -m 1 | cut -d"|" -f2) && echo "device:"$device'
@@ -36,20 +37,28 @@ def esppoolGetFreeDevice(chip):
         return ""
 
 
-def esppoolGrabDevice(deviceId):
-    command = 'esppool -g ' + deviceId
+def esppoolGrabDevice(deviceId, user):
+    command = 'esppool -g %s -u %s' % (deviceId, user)
+    p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output, errors = p.communicate()
+    output = output.decode('utf-8')
+    if ("Oops" in output):
+        print("Resource %s is already grabbed by another user" % deviceId)
+        return 0
+    elif("Successfully" in output):
+        return 1
+    else:
+        raise Exception(output)
+
+
+def esppoolReleaseDevice(deviceId, user):
+    command = 'esppool -r %s -u %s' % (deviceId, user)
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     p.communicate()
 
 
-def esppoolReleaseDevice(deviceId):
-    command = 'esppool -r ' + deviceId
-    p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    p.communicate()
-
-
-def esppoolResetDevice(deviceId):
-    command = 'esppool -i %s -u regression' % (deviceId)
+def esppoolResetDevice(deviceId, user):
+    command = 'esppool -i %s -u %s' % (deviceId, user)
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output, errors = p.communicate()
     output = output.decode('utf-8')
@@ -73,14 +82,14 @@ def esppoolResetDevice(deviceId):
     return resp
 
 
-def esppoolFlashDevice(deviceId, address, bin_path):
-    command = 'esppool -f ' + deviceId + ' -a ' + address + ' -b ' + bin_path
+def esppoolFlashDevice(deviceId, user, address, bin_path):
+    command = 'esppool -f %s -a %s -b %s -u %s' % (deviceId, address, bin_path, user)
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     p.communicate()
 
 
-def esppoolMonitorOutput(deviceId, tout=60):
-    command = 'esppool -m ' + deviceId
+def esppoolMonitorOutput(deviceId, user, tout=60):
+    command = 'esppool -m %s -u %s' % (deviceId, user)
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     timer = Timer(tout, p.kill)
     try:
@@ -91,7 +100,6 @@ def esppoolMonitorOutput(deviceId, tout=60):
 
     return output, error
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run privilege-separation tests')
     parser.add_argument('--build', help='Path to build directory')
@@ -100,20 +108,39 @@ if __name__ == '__main__':
     args = parser.parse_args()
     build = args.build
 
-    freeDevice = esppoolGetFreeDevice(args.chip)
-    if (freeDevice == ""):
-        raise Exception("No free device available")
+    if (args.chip == "esp32c3"):
+        iram_mask = "0x4038"
+        dram_mask = "0x3fc8"
+        reserved_rom_dram_mask = "0x3fcd"
+    elif (args.chip == "esp32s3"):
+        iram_mask = "0x4037"
+        dram_mask = "0x3fc9"
+        reserved_rom_dram_mask = "0x3fce"
 
-    print("Using device " + freeDevice)
+    # Generate a random user so that the CI instance doesn't grab the same device
+    user_id = randint(1000, 9999)
+    user = "regression_priv_sep_ci_%d" % user_id
+    device_grabbed = 0
+    freeDevice = ""
+    try:
+        while(not device_grabbed):
+            freeDevice = esppoolGetFreeDevice(args.chip)
+            if (freeDevice == ""):
+                raise Exception("No free device available")
 
-    esppoolGrabDevice(freeDevice)
-    print("Flashing to device...")
-    esppoolFlashDevice(freeDevice, '0x0', (build + '/bootloader/bootloader.bin'))
-    esppoolFlashDevice(freeDevice, '0x8000', (build + '/partition_table/partition-table.bin'))
-    esppoolFlashDevice(freeDevice, '0x10000', (build + '/violation_test.bin'))
-    esppoolFlashDevice(freeDevice, '0x110000', (build + '/user_app/user_app.bin'))
+            print("Using device " + freeDevice)
 
-    output = esppoolResetDevice(freeDevice)
+            device_grabbed = esppoolGrabDevice(freeDevice, user)
+        print("Flashing to device...")
+        esppoolFlashDevice(freeDevice, user, '0x0', (build + '/bootloader/bootloader.bin'))
+        esppoolFlashDevice(freeDevice, user, '0x8000', (build + '/partition_table/partition-table.bin'))
+        esppoolFlashDevice(freeDevice, user, '0x10000', (build + '/violation_test.bin'))
+        esppoolFlashDevice(freeDevice, user, '0x110000', (build + '/user_app/user_app.bin'))
+
+        output = esppoolResetDevice(freeDevice, user)
+    finally:
+        esppoolReleaseDevice(freeDevice, user)
+
     print(output)
 
     expected_output = [
@@ -122,16 +149,16 @@ if __name__ == '__main__':
             'Illegal IRAM access: Fault addr: 0x4037',
             'Deleting icache_access_t',
             'Deleting icache_execute_',
-            'Illegal IRAM access: Fault addr: 0x4038',
+            'Illegal IRAM access: Fault addr: %s' % iram_mask,
             'Deleting iram_execute_ta',
             'Deleting iram_write_task',
             'Deleting iram_read_task',
             'Illegal DRAM access: Fault addr: 0x3ff1',
             'Deleting drom_task',
-            'Illegal DRAM access: Fault addr: 0x3fc8',
+            'Illegal DRAM access: Fault addr: %s' % dram_mask,
             'Deleting dram_write_task',
             'Deleting dram_read_task',
-            'Illegal DRAM access: Fault addr: 0x3fcd',
+            'Illegal DRAM access: Fault addr: %s' % reserved_rom_dram_mask,
             'Deleting rom_reserve_wri',
             'Deleting rom_reserve_rea',
             'Illegal RTC access:',
