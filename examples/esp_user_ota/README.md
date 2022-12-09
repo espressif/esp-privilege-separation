@@ -31,6 +31,7 @@ $ git apply -v <path/to/privilege-separation>/idf-patches/privilege-separation_s
 ### Hardware
 
 - ESP32-C3 based development board
+- ESP32-S3 based development board
 
 ### Build and Flash
 
@@ -40,6 +41,7 @@ Build is separated in two parts: Protected app and User app.
 - User app relies on certain information and libraries derived from the protected build
 
 ```
+$ idf.py set-target { esp32c3 | esp32s3 }
 $ idf.py build
 $ idf.py flash monitor
 ```
