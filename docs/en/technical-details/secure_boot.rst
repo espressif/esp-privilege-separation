@@ -16,7 +16,7 @@ Protected app secure boot
 
 Protected application is similar to the application in ESP-IDF. Therefore, it follows the Secure boot mechanism of ESP-IDF application.
 
-Please refer to `Secure Boot V2 <https://docs.espressif.com/projects/esp-idf/en/v4.4.2/esp32c3/security/secure-boot-v2.html>`_ to
+Please refer to `Secure Boot V2 <https://docs.espressif.com/projects/esp-idf/en/v4.4.3/esp32c3/security/secure-boot-v2.html>`_ to
 enable secure boot for protected application
 
 
@@ -58,7 +58,7 @@ User app
 Verification process
 --------------------
 
-Verification process till protected application is the same as ESP-IDF `Secure Boot process <https://docs.espressif.com/projects/esp-idf/en/v4.4.2/esp32c3/security/secure-boot-v2.html#secure-boot-v2-process>`_
+Verification process till protected application is the same as ESP-IDF `Secure Boot process <https://docs.espressif.com/projects/esp-idf/en/v4.4.3/esp32c3/security/secure-boot-v2.html#secure-boot-v2-process>`_
 
 1. Once the protected application starts executing, a root of trust is established and protected app is guaranteed to be an authorized code
 2. Protected application looks for a valid user app in the flash and if found, it looks for the UAC at the end. The certificate is then verified with the CA certificate already present in the protected app. If the certificate verification fails, user app boot is aborted.
@@ -125,7 +125,7 @@ Install the required dependencies and add the directory to the PATH environment 
 Protected app
 ~~~~~~~~~~~~~
 
-- To enable secure boot for protected app, follow the `guide in ESP-IDF documentation <https://docs.espressif.com/projects/esp-idf/en/v4.4.2/esp32c3/security/secure-boot-v2.html#how-to-enable-secure-boot-v2>`_
+- To enable secure boot for protected app, follow the `guide in ESP-IDF documentation <https://docs.espressif.com/projects/esp-idf/en/v4.4.3/esp32c3/security/secure-boot-v2.html#how-to-enable-secure-boot-v2>`_
 
 - To enable secure boot for user app,
 

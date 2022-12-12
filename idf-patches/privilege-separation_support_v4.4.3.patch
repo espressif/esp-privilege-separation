@@ -35,10 +35,10 @@ index 5c7c072c46..705336cfd3 100644
 +
  endmenu  # ESP32C3-Specific
 diff --git a/components/esp32s3/Kconfig b/components/esp32s3/Kconfig
-index 07dd0a32be..1326a660dd 100644
+index a381a8b4b9..5ce47e6bf8 100644
 --- a/components/esp32s3/Kconfig
 +++ b/components/esp32s3/Kconfig
-@@ -515,4 +515,14 @@ menu "ESP32S3-Specific"
+@@ -526,4 +526,14 @@ menu "ESP32S3-Specific"
          help
              RAM size dedicated for static variables (.data & .bss sections).
  
@@ -129,7 +129,7 @@ index 9458dc39c3..0b8944e9ee 100644
  
    .flash.text :
 diff --git a/components/esp_system/ld/esp32s3/sections.ld.in b/components/esp_system/ld/esp32s3/sections.ld.in
-index e8b7489335..6e27432995 100644
+index c340d8e085..999842a47f 100644
 --- a/components/esp_system/ld/esp32s3/sections.ld.in
 +++ b/components/esp_system/ld/esp32s3/sections.ld.in
 @@ -4,6 +4,16 @@
@@ -2876,19 +2876,19 @@ index f7e815beff..5335d3003d 100644
          return true;
      }
 diff --git a/components/heap/port/esp32c3/memory_layout.c b/components/heap/port/esp32c3/memory_layout.c
-index 3ca3272417..ff5266d5f1 100644
+index 1f3825e41f..cef2eba116 100644
 --- a/components/heap/port/esp32c3/memory_layout.c
 +++ b/components/heap/port/esp32c3/memory_layout.c
-@@ -61,7 +61,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
-  *       this list should always be sorted from low to high by start address.
-  *
+@@ -75,7 +75,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
   */
+ #define APP_USABLE_DRAM_END           (SOC_ROM_STACK_START - SOC_ROM_STACK_SIZE)
+ 
 -const soc_memory_region_t soc_memory_regions[] = {
 +__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
-     { 0x3FC80000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x40380000}, //Block 4,  can be remapped to ROM, can be used as trace memory
-     { 0x3FCA0000, 0x20000, SOC_MEMORY_TYPE_DEFAULT, 0x403A0000}, //Block 5,  can be remapped to ROM, can be used as trace memory
-     { 0x3FCC0000, 0x20000, 1, 0x403C0000}, //Block 9,  can be used as trace memory
-@@ -70,7 +70,7 @@ const soc_memory_region_t soc_memory_regions[] = {
+     { 0x3FC80000,           0x20000,                                   SOC_MEMORY_TYPE_DEFAULT,     0x40380000}, //D/IRAM level1, can be used as trace memory
+     { 0x3FCA0000,           0x20000,                                   SOC_MEMORY_TYPE_DEFAULT,     0x403A0000}, //D/IRAM level2, can be used as trace memory
+     { 0x3FCC0000,           (APP_USABLE_DRAM_END-0x3FCC0000),          SOC_MEMORY_TYPE_DEFAULT,     0x403C0000}, //D/IRAM level3, can be used as trace memory
+@@ -85,7 +85,7 @@ const soc_memory_region_t soc_memory_regions[] = {
  #endif
  };
  
@@ -2898,27 +2898,19 @@ index 3ca3272417..ff5266d5f1 100644
  
  extern int _data_start, _heap_start, _iram_start, _iram_end, _rtc_force_slow_end;
 diff --git a/components/heap/port/esp32s3/memory_layout.c b/components/heap/port/esp32s3/memory_layout.c
-index ae592a2da6..006dc2a9c9 100644
+index 50da7e1fa2..b6e35d201c 100644
 --- a/components/heap/port/esp32s3/memory_layout.c
 +++ b/components/heap/port/esp32s3/memory_layout.c
-@@ -54,7 +54,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
-  *       this list should always be sorted from low to high by start address.
-  *
+@@ -73,7 +73,7 @@ const size_t soc_memory_type_count = sizeof(soc_memory_types) / sizeof(soc_memor
   */
+ #define APP_USABLE_DRAM_END           (SOC_ROM_STACK_START - SOC_ROM_STACK_SIZE)
+ 
 -const soc_memory_region_t soc_memory_regions[] = {
 +__attribute__((weak)) const soc_memory_region_t soc_memory_regions[] = {
  #ifdef CONFIG_SPIRAM
-     { SOC_EXTRAM_DATA_LOW, SOC_EXTRAM_DATA_SIZE, 4, 0}, //SPI SRAM, if available
+     { SOC_EXTRAM_DATA_LOW,  SOC_EXTRAM_DATA_SIZE,                       SOC_MEMORY_TYPE_SPIRAM,     0}, //SPI SRAM, if available
  #endif
-@@ -72,14 +72,14 @@ const soc_memory_region_t soc_memory_regions[] = {
-     { 0x3FCF0000, 0x8000,  0, 0},          //Level 9, DRAM
- #endif
- #if CONFIG_ESP32S3_DATA_CACHE_16KB
--    { 0x3C000000, 0x4000,  5, 0}
-+    { 0x3C000000, 0x4000,  5, 0},
- #endif
- #ifdef CONFIG_ESP_SYSTEM_ALLOW_RTC_FAST_MEM_AS_HEAP
-     { 0x600fe000, 0x2000,  6, 0}, //Fast RTC memory
+@@ -99,7 +99,7 @@ const soc_memory_region_t soc_memory_regions[] = {
  #endif
  };
  
@@ -3450,7 +3442,7 @@ index 0000000000..b500d42eaa
 +}
 +#endif
 diff --git a/components/soc/esp32s3/include/soc/soc.h b/components/soc/esp32s3/include/soc/soc.h
-index b16809779a..a686d8ae22 100644
+index f63b3ec762..04798e90e8 100644
 --- a/components/soc/esp32s3/include/soc/soc.h
 +++ b/components/soc/esp32s3/include/soc/soc.h
 @@ -108,6 +108,7 @@
